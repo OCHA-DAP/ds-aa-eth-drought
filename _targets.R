@@ -1,26 +1,4 @@
-# Load packages required to define the pipeline:
 library(targets)
-# library(tarchetypes) # Load other packages as needed.
-
-
-CODAB_FP = file.path(
-  Sys.getenv("AA_DATA_DIR"),
-  "public","raw","eth","cod_ab",
-  "eth_adm_csa_bofedb_2021_shp"
-)
-# "eth_admbnda_adm0_csa_bofedb_itos_2021" ,
-# "eth_admbnda_adm1_csa_bofedb_2021",
-# "eth_admbnda_adm2_csa_bofedb_2021",
-
-gdb_ecmwf_mars_tifs <- file.path(
-  Sys.getenv("AA_DATA_DIR"),
-  "private",
-  "processed",
-  "eth",
-  "ecmwf_seasonal",
-  "seas51",
-  "mars"
-)
 
 # Set target options:
 tar_option_set(
@@ -38,10 +16,17 @@ options(clustermq.scheduler = "multicore")
 
 tar_source()
 
+fps <- r_proj_file_paths()
+
 list(
+
+# Load Inputs -------------------------------------------------------------
+
+## AOI - Admin 3 Level ####
+
   tar_target(
     name = gdf_adm3,
-    command = st_read(CODAB_FP,
+    command = st_read(fps$CODAB_FP,
                       layer = "eth_admbnda_adm3_csa_bofedb_2021") %>% 
       clean_names() %>% 
       mutate(
@@ -52,10 +37,17 @@ list(
         matches("^adm\\d_[ep]|^area|pct_area")
       )
   ),
+
+##  Raster Tifs ####
   tar_target(
     name = r_ecmwf_mars,
-    command = load_mars_raster(gdb = gdb_ecmwf_mars_tifs)
+    command = load_mars_raster(gdb = fps$GDB_ECMWF_MARS_TIFS)
   ),
+
+
+# Zonal Statistics --------------------------------------------------------
+
+## Zonal Means to Admin 3 ####
   tar_target(
     name = df_ecmwf_zonal_adm3,
     command= zonal_ecmwf_mars(
@@ -65,6 +57,9 @@ list(
       cols_keep = colnames(gdf_adm3)
       )
   ),
+
+
+# Aggregate from Admin 3 to Rest ------------------------------------------
   tar_target(
     name= df_ecmwf_zonal,
     command =map(
@@ -72,9 +67,11 @@ list(
         aggregate_tabular_forecast(df = df_ecmwf_zonal_adm3,
                                    report_level = rep_level_tmp) %>% 
           
-          # write parquets direct to trigger App for updating
+          # write parquets direct to trigger App for updating - 
+          # will change in the long run, but more effecient for app developement in
+          # other repo.
           write_parquet(
-            glue("../TriggerApp2024/data/df_eth_mars_zonal_{rep_level_tmp}.parquet")
+            glue("../TriggerApp2024/data/df_eth_mars_zonal_{rep_level_tmp}.parquet"),
           )
       }
     )
