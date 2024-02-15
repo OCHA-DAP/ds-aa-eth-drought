@@ -2,29 +2,35 @@ aggregate_tabular_forecast <- function(df,
                                        report_level){
   
   grp_adms <- switch(report_level,
-         "adm0" =c("adm0_en","adm0_pcode"),
-         "adm1" =c("adm0_en","adm0_pcode","adm1_en","adm1_pcode"),
-         "adm2" =c("adm0_en","adm0_pcode","adm1_en","adm1_pcode","adm2_en","adm2_pcode")
-      
-         )
-  
-  df |> 
-  group_by(
-    !!!syms(grp_adms),
-    lt,
-    pub_date, 
-    valid_date,
-    pub_month, 
-    valid_month
-    
-  ) |> 
-  mutate(
-    pct_area = pct_area/(sum(pct_area))
-  ) %>% 
-  summarise(
-    value = weighted.mean(x= value, w= pct_area),
-    .groups="drop"
+                     "adm0" =c("adm0_en","adm0_pcode"),
+                     "adm1" =c("adm0_en","adm0_pcode","adm1_en","adm1_pcode"),
+                     "adm2" =c("adm0_en","adm0_pcode","adm1_en","adm1_pcode","adm2_en","adm2_pcode")
   )
+  # input data already aggreated to admin 3 -- so don't need to do anything to further
+  # aggregate those for adm 3 level reporting
+  if(report_level =="adm3"){
+    ret <- df
+  }else{
+    
+    ret <- df |> 
+      group_by(
+        !!!syms(grp_adms),
+        lt,
+        pub_date, 
+        valid_date,
+        pub_month, 
+        valid_month
+        
+      ) |> 
+      mutate(
+        pct_area = pct_area/(sum(pct_area))
+      ) %>% 
+      summarise(
+        value = weighted.mean(x= value, w= pct_area),
+        .groups="drop"
+      )
+  }
+  return(ret)
 }
 
 

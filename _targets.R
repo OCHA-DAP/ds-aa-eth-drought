@@ -61,18 +61,12 @@ list(
 
 # Aggregate from Admin 3 to Rest ------------------------------------------
   tar_target(
-    name= df_ecmwf_zonal,
+    name= ldf_ecmwf_zonal,
     command =map(
-      c("adm2","adm1","adm0"), \(rep_level_tmp){
+      c(adm0="adm0",adm1="adm1",adm2="adm2",adm3="adm3"),
+      \(rep_level_tmp){
         aggregate_tabular_forecast(df = df_ecmwf_zonal_adm3,
-                                   report_level = rep_level_tmp) %>% 
-          
-          # write parquets direct to trigger App for updating - 
-          # will change in the long run, but more effecient for app developement in
-          # other repo.
-          write_parquet(
-            glue("../TriggerApp2024/data/df_eth_mars_zonal_{rep_level_tmp}.parquet"),
-          )
+                                   report_level = rep_level_tmp) 
       }
     )
   )
