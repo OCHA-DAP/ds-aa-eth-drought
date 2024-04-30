@@ -2,7 +2,11 @@
 title: "Review of Seasons for Ethiopia"
 author: "Pauline"
 date: "`r Sys.Date()`"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: false
 runtime: shiny
 ---
 
@@ -10,13 +14,14 @@ runtime: shiny
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Rainy Season Review by Admin Level
+## Rainy Season Review by Admin Level
 
 This document looks at possible seasons per each admin level for Ethiopia.
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 library(TriggerApp2024)
 library(tidyverse)
+library(shiny)
 library(gghdx)
 gghdx()
 #ldf <- load_df_forecast(dataset = "mars_eth")
@@ -48,7 +53,7 @@ ldf <- purrr::map(
 Using a threshold, seasons can be defined as those months having mean rainfall above the quantile.
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
-sliderInput("season_thresh", "Threshold Quantile for Season:", 0.33, min = 0, max = 1)
+sliderInput("season_thresh", "Threshold Quantile for Season:", 0.4, min = 0, max = 1)
 adm0_monthly_means <- reactive({
   ldf$adm0 %>%
   mutate(month_name = factor(month.abb[valid_month], levels = month.abb)) %>%
@@ -56,7 +61,7 @@ adm0_monthly_means <- reactive({
   summarise(mean_value = mean(value, na.rm = TRUE)) %>%
   group_by(adm0_pcode, adm0_en) %>%
   mutate(season_thresh = quantile(mean_value, probs = input$season_thresh), 
-         in_season = ifelse(mean_value >= season_thresh, "Yes", "No"))
+         in_season = ifelse(mean_value >= season_thresh, "In-Seas", ""))
 })
 
 renderPlot({
@@ -91,7 +96,7 @@ adm1_monthly_means <- reactive({
   summarise(mean_value = mean(value, na.rm = TRUE)) %>%
   group_by(adm1_pcode, adm1_en) %>%
   mutate(season_thresh = quantile(mean_value, probs = input$season_thresh), 
-         in_season = ifelse(mean_value >= season_thresh, "Yes", "No"))
+         in_season = ifelse(mean_value >= season_thresh, "In-Seas", ""))
 })
 
 renderPlot({
@@ -109,7 +114,7 @@ DT::renderDT({
   DT::datatable(adm1_monthly_means() %>%
     select(month_name, in_season) %>% 
     pivot_wider(names_from = month_name, values_from = in_season),
-    filter = "top")
+    filter = "top", options = list(pageLength = -1))
 })
 ```
 
@@ -123,17 +128,58 @@ adm2_monthly_means <- reactive({
   summarise(mean_value = mean(value, na.rm = TRUE)) %>%
   group_by(adm1_pcode, adm1_en, adm2_pcode, adm2_en) %>%
   mutate(season_thresh = quantile(mean_value, probs = input$season_thresh), 
-         in_season = ifelse(mean_value >= season_thresh, "Yes", "No"))
+         in_season = ifelse(mean_value >= season_thresh, "In-Seas", ""))
 })
 ```
 
 ### Table Showing Whether a Month is considered in season or not
 
+This looks at months where percent of zones in the region have the rainfall mean above the threshold set above.
+
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
+sliderInput("zonal_thresh", "Percent of Zones to consider:", 0.8, min = 0, max = 1)
+
 DT::renderDT({
   DT::datatable(adm2_monthly_means() %>%
-    select(month_name, in_season) %>% 
-    pivot_wider(names_from = month_name, values_from = in_season),
-    filter = "top")
+  group_by(adm1_pcode, adm1_en, month_name) %>%
+  summarise(adm2_inseason = sum(in_season == "In-Seas") / n()) %>%
+  select(month_name, adm2_inseason) %>% 
+  filter(adm2_inseason >= input$zonal_thresh) %>%
+  group_by(adm1_pcode, adm1_en) %>%
+  summarise(concat_months = paste(month_name, collapse = "-")),
+    filter = "top", options = list(pageLength = -1))
+})
+```
+
+## At Woreda Level
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+adm3_monthly_means <- reactive({
+  ldf$adm3 %>%
+  mutate(month_name = factor(month.abb[valid_month], levels = month.abb)) %>%
+  group_by(adm1_pcode, adm1_en, adm2_pcode, adm2_en, adm3_pcode, adm3_en, month_name) %>%
+  summarise(mean_value = mean(value, na.rm = TRUE)) %>%
+  group_by(adm1_pcode, adm1_en, adm2_pcode, adm2_en, adm3_pcode, adm3_en) %>%
+  mutate(season_thresh = quantile(mean_value, probs = input$season_thresh), 
+         in_season = ifelse(mean_value >= season_thresh, "In-Seas", ""))
+})
+```
+
+### Table Showing Whether a Month is considered in season or not
+
+This looks at months where percent of zones in the region have the rainfall mean above the threshold set above. The months are those that have a percent of the woredas where the rainfall is above the set quantile.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+sliderInput("woreda_thresh", "Percent of Woredas to consider:", 0.8, min = 0, max = 1)
+
+DT::renderDT({
+  DT::datatable(adm3_monthly_means() %>%
+  group_by(adm1_pcode, adm1_en, month_name) %>%
+  summarise(adm3_inseason = sum(in_season == "In-Seas") / n()) %>%
+  select(month_name, adm3_inseason) %>% 
+  filter(adm3_inseason >= input$woreda_thresh) %>%
+  group_by(adm1_pcode, adm1_en) %>%
+  summarise(concat_months = paste(month_name, collapse = "-")),
+    filter = "top", options = list(pageLength = -1))
 })
 ```
