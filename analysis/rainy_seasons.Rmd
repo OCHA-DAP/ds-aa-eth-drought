@@ -115,7 +115,7 @@ DT::renderDT({
     select(month_name, in_season) %>% 
     pivot_wider(names_from = month_name, values_from = in_season),
     filter = "top", options = list(pageLength = -1))
-})
+}, width = "80%")
 ```
 
 ## At Zonal Level
