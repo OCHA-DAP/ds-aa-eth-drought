@@ -27,15 +27,19 @@ list(
   tar_target(
     name = gdf_adm3,
     command = st_read(fps$CODAB_FP,
-                      layer = "eth_admbnda_adm3_csa_bofedb_2021") %>% 
+                      layer = "eth_admbnda_adm3_csa_bofedb_2024") %>% 
       clean_names() %>% 
       mutate(
         area = st_area(.),
         pct_area = as.numeric(area/sum(area))
       ) %>% 
-      select(
-        matches("^adm\\d_[ep]|^area|pct_area")
-      )
+      dplyr::select(
+        matches("^admin\\d|^area|pct_area")
+      ) %>%
+      rename(adm0_en = admin0name_en, adm0_pcode = admin0pcode,
+             adm1_en = admin1name_en, adm1_pcode = admin1pcode,
+             adm2_en = admin2name_en, adm2_pcode = admin2pcode,
+             adm3_en = admin3name_en, adm3_pcode = admin3pcode)
   ),
 
 ##  Raster Tifs ####
