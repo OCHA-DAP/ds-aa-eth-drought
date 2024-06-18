@@ -1,0 +1,112 @@
+---
+title: "Performance"
+author: "Pauline"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(TriggerApp2024)
+library(tidyverse)
+library(shiny)
+library(sf)
+library(arrow)
+library(gghdx)
+gghdx()
+
+adm3_actual <- read_parquet("../data/eth_adm3.parquet") %>%
+  mutate(median = median*1000,
+         date = as.Date(time),
+         month = month(date),
+         year = year(date),
+         monthly_total = case_when(
+           month %in% c(1, 3, 5, 7, 8, 10, 12) ~ median * 31,
+           month %in% c(4, 6, 9, 11) ~ median * 30,
+           month %in% c(2) ~ median * 29,
+           (month %in% c(2) & year %% 4) ~ median * 29,
+           .default = median))
+
+mam_ond_woredas <- read_csv("G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/mam_ond_woredas.csv")
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+mam_ond <- adm3_actual |>
+  filter(month %in% c(3,4,5,10,11,12) & admin3Pcode %in% mam_ond_woredas$admin3Pcode) |>
+  mutate(season = case_when(month %in% c(3,4,5) ~ "MAM",
+                            month %in% c(10,11,12) ~ "OND",
+                            .default = NA)) |>
+  group_by(admin3Pcode, year, season) |>
+  summarise(season_total = sum(monthly_total)) |>
+  group_by(year, season) |>
+  summarise(season_mean = mean(season_total)) |>
+  group_by(season) |>
+  mutate(inverse_quant = ecdf(season_mean)(season_mean), 
+         return_period_5 = quantile(season_mean, 1/5),
+         drought_year_5 = if_else(season_mean <= return_period_5, "Yes", "No"),
+         return_period_4 = quantile(season_mean, 1/4),
+         drought_year_4 = if_else(season_mean <= return_period_4, "Yes", "No"),
+         return_period_3 = quantile(season_mean, 1/3),
+         drought_year_3 = if_else(season_mean <= return_period_3, "Yes", "No"))
+
+```
+```{r}
+mam_ond |>
+  mutate(consec_years = sequence(rle(drought_year_5)$lengths))
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+rp_obj <- mam_ond |>
+  group_by(season) |>
+  mutate(return_period_3 = quantile(season_mean, 1/3),
+         drought_year_3 = if_else(season_mean <= return_period_3, "Yes", "No"),
+         )
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+mam_rp <- quantile((mam_ond |> filter(season == "MAM") |> pull(season_mean)), 0.2)
+ond_rp <- quantile((mam_ond |> filter(season == "OND") |> pull(season_mean)), 0.2)
+
+ggplot(data = mam_ond) +
+  geom_bar(aes(x = year, y = season_mean, fill = season), stat = "identity", position = "dodge") +
+  labs(title = "MAM/OND Rainfall over the years",
+       x = "Year",
+       y = "Rainfall (mm)",
+       fill = "Season") +
+  geom_hline(yintercept = mam_rp, 
+             linetype="dashed", color = "tomato") +
+  geom_text(aes(2020, mam_rp, label = paste("MAM:", round(mam_rp), 1), vjust = -1), 
+            size = 4, color="black") +
+  geom_hline(yintercept = ond_rp, 
+             linetype="dashed", color = "tomato") +
+  geom_text(aes(2020, ond_rp, label = paste("OND:", round(ond_rp), 1), vjust = -1), 
+            size = 4, color="black")
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+mam_rp <- quantile((mam_ond |> filter(season == "MAM") |> pull(season_mean)), 1/3)
+ond_rp <- quantile((mam_ond |> filter(season == "OND") |> pull(season_mean)), 1/3)
+
+ggplot(data = mam_ond) +
+  geom_bar(aes(x = year, y = season_mean, fill = season), stat = "identity", position = "dodge") +
+  labs(title = "MAM/OND Rainfall over the years",
+       x = "Year",
+       y = "Rainfall (mm)",
+       fill = "Season") +
+  geom_hline(yintercept = mam_rp, 
+             linetype="dashed", color = "tomato") +
+  geom_text(aes(2020, mam_rp, label = paste("MAM:", round(mam_rp), 1), vjust = -1), 
+            size = 4, color="black") +
+  geom_hline(yintercept = ond_rp, 
+             linetype="dashed", color = "tomato") +
+  geom_text(aes(2020, ond_rp, label = paste("OND:", round(ond_rp), 1), vjust = -1), 
+            size = 4, color="black")
+```

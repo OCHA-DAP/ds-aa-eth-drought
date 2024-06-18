@@ -1,0 +1,25 @@
+---
+title: "Exploring Red Cross Trigger"
+author: "Pauline"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(shiny)
+library(gghdx)
+library(arrow)
+gghdx()
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+adm2_actual <- read_parquet("../data/eth_adm2.parquet")
+
+```
+

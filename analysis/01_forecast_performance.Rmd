@@ -1,0 +1,275 @@
+---
+title: "Forecast Bias"
+author: "Pauline"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This looks at the forecast bias across different lead times. 
+Also looks at the performance based on a 1-in-5 year RP.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(arrow)
+library(gghdx)
+options(scipen = 9999)
+gghdx()
+adm3_forecast <- read_parquet("../../TriggerApp2024/data/df_eth_mars_zonal_adm3.parquet")
+  
+adm3_actual <- read_parquet("../data/eth_adm3.parquet") %>%
+  mutate(median = median*1000,
+         date = as.Date(time),
+         month = month(date),
+         year = year(date),
+         monthly_total = case_when(
+           month %in% c(1, 3, 5, 7, 8, 10, 12) ~ median * 31,
+           month %in% c(4, 6, 9, 11) ~ median * 30,
+           month %in% c(2) ~ median * 29,
+           (month %in% c(2) & year %% 4) ~ median * 29,
+           .default = median))
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+woreda_seasons <- read_csv("G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/seasons_for_woredas.csv")
+ond_woredas <- woreda_seasons %>%
+  filter(season2 == "OND")
+mam_woredas <- woreda_seasons %>%
+  filter(season1 == "MAM")
+jjas_woredas <- woreda_seasons %>%
+  filter(season1 == "JJAS")
+```
+
+The average rainfall by lead time.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+adm3_forecast %>%
+  group_by(lt) %>%
+  summarise(value_by_lt = mean(value, na.rm = T)) %>%
+  ggplot() + 
+    geom_line(aes(x = lt, y = value_by_lt)) + 
+    labs(title = "Monthly Rainfall by Lead time", 
+         x = "Lead time", 
+         y = "Monthly Rainfall")
+```
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+adm3_forecast %>%
+  mutate(season = case_when(valid_month %in% c(10,11,12) ~ "OND",
+                            valid_month %in% c(6,7,8,9) ~ "JJAS",
+                            valid_month %in% c(3,4,5) ~ "MAM",
+                            .default = NA)) %>%
+  filter(adm3_pcode %in% ond_woredas$admin3Pcode) %>%
+  group_by(lt, season) %>%
+  summarise(value_by_lt = mean(value, na.rm = T)) %>%
+  filter(season == "OND") %>%
+  ggplot() + 
+    geom_line(aes(x = lt, y = value_by_lt)) + 
+    labs(title = "Monthly Rainfall by Lead time for Oct-Dec", 
+         x = "Lead time", 
+         y = "Monthly Rainfall")
+```
+
+
+### Looking at a 1-in-5 RP by woreda
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+actual_df <- adm3_actual %>%
+  group_by(admin3Pcode, month) %>%
+  mutate(threshold = quantile(monthly_total, 0.2, na.rm = T), 
+         below_thresh = monthly_total <= threshold)
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+forecast_df <- adm3_forecast %>%
+  group_by(adm3_pcode, valid_month, lt) %>%
+  mutate(for_threshold = quantile(value, 0.05, na.rm = T), 
+         for_below_thresh = value <= for_threshold)
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+combined_df <- actual_df %>%
+  merge(forecast_df, by.x = c("admin3Pcode", "date"), by.y = c("adm3_pcode", "valid_date")) %>%
+  mutate(
+    bias = value - monthly_total,
+    percent_bias = (bias*100) / monthly_total)
+```
+
+
+Testing which years the forecast would have triggered for OND.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# list of bad years from CDS data
+combined_df %>%
+  filter(month %in% c(10,11,12) &
+           admin3Pcode %in% ond_woredas$admin3Pcode & 
+           below_thresh) %>%
+  group_by(year, month) %>%
+  summarise(num_regions = n_distinct(admin3Pcode)) %>%
+  filter(num_regions > 0.5*nrow(ond_woredas)) %>%
+  write_csv("G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/ond_bad_years.csv")
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# list of bad years from forecast
+combined_df %>%
+  filter(month %in% c(10,11,12) &
+           admin3Pcode %in% ond_woredas$admin3Pcode & 
+           for_below_thresh) %>%
+  group_by(year) %>%
+  summarise(num_regions = n_distinct(admin3Pcode)) %>%
+  filter(num_regions > 0.6*nrow(ond_woredas)) %>%
+  write_csv("G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/ond_forecast_trigger_years.csv")
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+annual_df <- combined_df %>%
+  mutate(season = case_when(month %in% c(3, 4, 5) ~ "MAM",
+                            month %in% c(10, 11, 12) ~ "OND")) %>%
+  filter(!is.na(season) & admin3Pcode %in% ond_woredas$admin3Pcode) %>%
+  group_by(admin3Pcode, year, season) %>%
+  summarise(seasonal_val = sum(monthly_total, na.rm = T)) %>%
+  group_by(year, season) %>%
+  summarise(annual_val = mean(seasonal_val, na.rm = T))
+mam_quant <- quantile((annual_df %>%
+                           filter(season == "MAM"))$annual_val, 0.2)
+ond_quant <- quantile((annual_df %>%
+                           filter(season == "OND"))$annual_val, 0.2)
+ggplot(data = annual_df) +
+  geom_bar(aes(x = year, y = annual_val, fill = season), stat = "identity", position = "dodge") +
+  labs(title = "MAM/OND Rainfall over the years",
+       x = "Year", y = "Rainfall(mm)") + 
+  geom_hline(yintercept = mam_quant, color = "red", linetype = "dotted", size = 1) +
+  geom_text(aes(x = max(year), y = mam_quant, label = paste("MAM:", round(mam_quant, 1))), 
+            vjust = -1, hjust = 1, size = 4, color = "black") + 
+  geom_hline(yintercept = ond_quant, color = "red", linetype = "dotted", size = 1) +
+  geom_text(aes(x = max(year), y = ond_quant, label = paste("OND:", round(ond_quant, 1))), 
+            vjust = -1, hjust = 1, size = 4, color = "black") 
+  
+```
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+combined_df %>%
+  group_by(lt) %>%
+  summarise(corr_by_lt = cor(monthly_total, value, use='complete.obs')) %>%
+  ggplot() + 
+    geom_line(aes(x = lt, y = corr_by_lt)) + 
+    labs(title = "Correlation of forecast and rainfall across lead times", 
+         x = "Lead time", 
+         y = "Correlation")
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+adm3_overall <- combined_df %>%
+  filter(month %in% c(10, 11, 12) & admin3Pcode %in% ond_woredas$admin3Pcode) %>%
+  group_by(admin3Pcode, year) %>%
+  summarise(fore_event = any(for_below_thresh),
+                obs_event = any(below_thresh),
+                metric = case_when(fore_event & obs_event ~ "TP",
+                                   fore_event & !obs_event ~ "FP",
+                                   !fore_event & obs_event ~ "FN",
+                                   !fore_event & !obs_event ~ "TN",
+                                   .default = NA)) %>%
+  ungroup() %>%
+  count(admin3Pcode, metric) %>%
+  pivot_wider(names_from = metric, values_from = n) %>%
+  mutate(F1 = (2 * TP) / ((2 * TP) + FN + FP),
+         TPR = TP / (TP+FN),
+         FNR = FN/(FN + TP), 
+         FAR = FP/(TN + FP)) %>%
+  summarise(across(everything(), mean, na.rm = T)) %>%
+  pivot_longer(everything(), names_to = "metrics", values_to = "values")
+
+ggplot(data = adm3_overall %>% filter(metrics %in% c("F1", "TPR", "FAR", "FNR"))) +
+  geom_bar(aes(x = metrics, y = values), stat = "identity") + 
+  labs(title = "ECMWF Forecast Performance Metrics for OND",
+       y = "Value",
+       x = "Metric",
+       color = "")
+  
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+region_thresh <- seq(0, 1, 0.1)
+
+adm3_count <- map_dfr(region_thresh, ~{
+  thresh <- .x
+    combined_df %>%
+      filter(month %in% c(10, 11, 12) & admin3Pcode %in% ond_woredas$admin3Pcode) %>%
+      group_by(admin3Pcode, year) %>%
+      summarise(fore_event = any(for_below_thresh),
+                obs_event = any(below_thresh),
+                metric = case_when(fore_event & obs_event ~ "TP",
+                                   fore_event & !obs_event ~ "FP",
+                                   !fore_event & obs_event ~ "FN",
+                                   !fore_event & !obs_event ~ "TN",
+                                   .default = NA)) %>%
+      group_by(year) %>%
+      summarise(fore_thresh = sum(fore_event, na.rm = T) >= thresh * nrow(ond_woredas),
+                obs_thresh = sum(obs_event, na.rm = T) >= thresh * nrow(ond_woredas),
+                metric = case_when(fore_thresh & obs_thresh ~ "TP",
+                                   fore_thresh & !obs_thresh ~ "FP",
+                                   !fore_thresh & obs_thresh ~ "FN",
+                                   !fore_thresh & !obs_thresh ~ "TN",
+                                   .default = NA)) %>%
+      count(metric, thresh = thresh)
+  })
+
+ggplot(data = adm3_count) +
+  geom_line(aes(x = thresh, y = n, group = metric, color = metric), size = 1) + 
+  labs(title = "ECMWF Forecast Performance Metrics for OND",
+       y = "Value",
+       x = "Threshold for Proportion of Woredas",
+       color = "")
+```
+
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+adm3_mean <- combined_df %>%
+  filter(month %in% c(10, 11, 12) & admin3Pcode %in% ond_woredas$admin3Pcode) %>%
+  group_by(admin3Pcode, lt, year) %>%
+  summarise(fore_event = any(for_below_thresh),
+                obs_event = any(below_thresh),
+                metric = case_when(fore_event & obs_event ~ "TP",
+                                   fore_event & !obs_event ~ "FP",
+                                   !fore_event & obs_event ~ "FN",
+                                   !fore_event & !obs_event ~ "TN",
+                                   .default = NA)) %>%
+  ungroup() %>%
+  count(admin3Pcode, lt, metric) %>%
+  pivot_wider(names_from = metric, values_from = n) %>%
+  mutate(F1 = (2 * TP) / ((2 * TP) + FN + FP),
+         TPR = TP / (TP+FN),
+         FNR = FN/(FN + TP), 
+         FAR = FP/(TN + FP)) %>%
+  group_by(lt) %>%
+  summarise(across(-c(admin3Pcode), mean, na.rm = T)) %>%
+  pivot_longer(!lt, names_to = "metrics", values_to = "values")
+
+ggplot(data = adm3_mean %>% filter(metrics %in% c("F1", "TPR", "FAR", "FNR"))) +
+  geom_line(aes(x = lt, y = values, group = metrics, color = metrics), size = 1) + 
+  labs(title = "ECMWF Forecast Performance Metrics for OND by lead time",
+       y = "Value",
+       x = "Lead time",
+       color = "")
+  
+```
+
+
+
+

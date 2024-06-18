@@ -1,0 +1,44 @@
+---
+title: "Performance"
+author: "Pauline"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(TriggerApp2024)
+library(tidyverse)
+library(shiny)
+library(sf)
+library(gghdx)
+gghdx()
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+eth_files <- list.files('../data', pattern = "eth_adm")
+fp_eth_files <- file.path(
+  "../data",
+  eth_files
+)
+adm_level_labels <- stringr::str_extract(eth_files,"adm\\d")
+
+ldf <- purrr::map(
+  rlang::set_names(fp_eth_files, adm_level_labels),
+  \(fp_tmp){
+    arrow::read_parquet(
+     fp_tmp
+    )
+  }
+)
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+```
