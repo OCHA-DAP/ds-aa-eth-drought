@@ -29,6 +29,11 @@ eth_adm1_codab <- st_read(
     Sys.getenv("AA_DATA_DIR"),
     "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"), 
   layer = "eth_admbnda_adm1_csa_bofedb_2024")
+eth_adm2_codab <- st_read(
+  file.path(
+    Sys.getenv("AA_DATA_DIR"),
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"), 
+  layer = "eth_admbnda_adm2_csa_bofedb_2024")
 eth_adm3_lhz <- st_read(
   file.path(
     Sys.getenv("AA_DATA_DIR"),
@@ -40,6 +45,7 @@ ggplot(data = eth_adm3_lhz) +
   geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
     labs(title = "FEWS NET Livelihood Zones",
          fill = "Livelihood Zone")
+### Admin 3
 
 # Check and align CRS if they are different
 if (st_crs(eth_adm3_codab) != st_crs(eth_adm3_lhz)) {
@@ -73,14 +79,17 @@ st_write(most_cover, file.path(Sys.getenv("AA_DATA_DIR"),
 
 write_csv(most_cover %>%
             st_drop_geometry() %>%
-            dplyr::select(admin3Name_en, admin3Pcode, LZTYPE), 
+            dplyr::select(admin3Name_en, admin3Pcode, admin2Name_en, admin2Pcode, admin1Name_en, admin1Pcode, LZTYPE), 
           "G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/fewsnet_lhz_woredas.csv")
 
 woredas_fewsnet <- most_cover %>%
-  mutate(season = case_when((LZTYPE == "Cropping - Meher Dominant" | 
-                               admin1Name_en == "Gambela") ~ "JJAS",
-                            LZTYPE == "Urban" ~ NA,
-                            .default = "MAM/OND"))
+  mutate(season = case_when(
+    (LZTYPE %in% c("Cropping - Belg Dominant", "Pastoral", "Agropastoral") |
+      admin3Name_en %in% c("Dolo Ado", "Bokolmayo", "Nyngatom", "Dasenech /Kuraz")) & 
+      admin1Name_en != "Gambela" ~ "MAM/OND",
+    LZTYPE %in% c("Cropping - Meher Dominant") | admin1Name_en %in% c("Gambela") ~ "JJAS",
+    .default = NA))
+
 jjas_woredas_fewsnet <- woredas_fewsnet %>%
   filter(season == "JJAS") %>%
   st_drop_geometry() %>%
@@ -95,6 +104,64 @@ ggplot(data = woredas_fewsnet) +
     geom_sf(aes(fill = season, geometry = Shape)) + 
     geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
     labs(title = "FEWS NET Seasons by Woreda",
+         fill = "Seasons")
+
+
+
+```
+
+```{r}
+### Admin 2
+
+# Check and align CRS if they are different
+if (st_crs(eth_adm2_codab) != st_crs(eth_adm3_lhz)) {
+  eth_adm2_lhz <- st_transform(eth_adm3_lhz, st_crs(eth_adm2_codab))
+}
+
+# Perform the spatial join to retain all admin zones
+spatial_join <- st_join(eth_adm2_codab, eth_adm3_lhz, join = st_intersects)
+
+# Calculate the area of each intersection
+spatial_join <- spatial_join %>%
+  mutate(area = st_area(Shape))
+
+# Group by administrative zones and find the one with the most cover
+# Assuming the administrative zone is identified by a column named 'admin_zone'
+most_cover <- spatial_join %>%
+  group_by(admin2Pcode) %>%
+  slice_max(order_by = area, with_ties = F) %>%
+  ungroup()
+
+ggplot(data = most_cover) +
+    geom_sf(aes(fill = LZTYPE, geometry = Shape)) + 
+    geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
+    labs(title = "FEWS NET Livelihood Zones by Zone",
+         fill = "Livelihood Zone")
+write_csv(most_cover %>%
+            st_drop_geometry() %>%
+            dplyr::select(admin2Name_en, admin2Pcode, admin1Name_en, admin1Pcode, LZTYPE), 
+          "G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/fewsnet_lhz_zones.csv")
+
+zones_fewsnet <- most_cover %>%
+  mutate(season = case_when(
+    LZTYPE %in% c("Cropping - Belg Dominant", "Pastoral", "Agropastoral") ~ "MAM/OND",
+    LZTYPE %in% c("Cropping - Meher Dominant") | admin1Name_en %in% c("Gambela") ~ "JJAS",
+    .default = NA))
+
+jjas_zones_fewsnet <- zones_fewsnet %>%
+  filter(season == "JJAS") %>%
+  st_drop_geometry() %>%
+  write_csv("G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/jjas_zones_fewsnet.csv")
+
+mam_ond_zones_fewsnet <- zones_fewsnet %>%
+  filter(season == "MAM/OND") %>%
+  st_drop_geometry() %>%
+  write_csv("G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/mam_ond_zones_fewsnet.csv")
+
+ggplot(data = zones_fewsnet) +
+    geom_sf(aes(fill = season, geometry = Shape)) + 
+    geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
+    labs(title = "FEWS NET Seasons by Zone",
          fill = "Seasons")
 ```
 
