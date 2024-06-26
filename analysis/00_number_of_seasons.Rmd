@@ -28,6 +28,11 @@ eth_adm3_codab <- st_read(
     Sys.getenv("AA_DATA_DIR"),
     "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"), 
   layer = "eth_admbnda_adm3_csa_bofedb_2024")
+eth_adm2_codab <- st_read(
+  file.path(
+    Sys.getenv("AA_DATA_DIR"),
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"), 
+  layer = "eth_admbnda_adm2_csa_bofedb_2024")
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -41,11 +46,11 @@ process_rasters <- pheno_vec %>%
         Sys.getenv("AA_DATA_DIR"),
         "public", "raw", "glb", "asap", 
         "reference_data", pheno_obj))
-    eth_season_crop <- crop(pheno_raster, extent(eth_adm3_codab))
-    eth_season_mask <- mask(eth_season_crop, eth_adm3_codab)
+    eth_season_crop <- crop(pheno_raster, extent(eth_adm2_codab))
+    eth_season_mask <- mask(eth_season_crop, eth_adm2_codab)
     eth_season_mask[eth_season_mask > 108] <- NA
-    eth_adm3_seasons <- raster::extract(eth_season_mask, eth_adm3_codab, fun=median, na.rm = T)[,1]
-    return(round(eth_adm3_seasons))
+    eth_adm2_seasons <- raster::extract(eth_season_mask, eth_adm2_codab, fun=median, na.rm = T)[,1]
+    return(round(eth_adm2_seasons))
   }) 
 
 ```
@@ -68,7 +73,7 @@ process_dekads <- function(column){
 Showing the number of seasons by Woreda
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-eth_seasons <- eth_adm3_codab %>%
+eth_seasons <- eth_adm2_codab %>%
   bind_cols(process_rasters %>% 
               bind_cols()) %>%
   mutate(start1_mon = process_dekads(phenos1_v03.tif),
@@ -77,6 +82,8 @@ eth_seasons <- eth_adm3_codab %>%
          start2_mon = process_dekads(phenos2_v03.tif),
          sen2_mon = process_dekads(phenosen2_v03.tif),
          end2_mon = process_dekads(phenoe2_v03.tif))
+
+write_csv(eth_seasons %>% st_drop_geometry(), "G:/Shared drives/Predictive Analytics/CERF Anticipatory Action/Ethiopia/2024/Trigger Development/asap_seasons_zones.csv")
 ```
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
@@ -121,9 +128,9 @@ ggplot(data = eth_seasons) +
 Start of Second Season
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-ggplot(data = eth_seasons) +
+ggplot(data = eth_seasons %>% filter(!admin2Name_en %in% c("Min", "Max"))) +
   geom_sf(aes(fill = month(start2_mon, label = TRUE), geometry = Shape)) + 
-  labs(title = "Start of Second Season by Woreda",
+  labs(title = "Start of Second Season by Zone",
        fill = "Month") 
 
 ```
@@ -131,9 +138,9 @@ ggplot(data = eth_seasons) +
 Start of senescence, Second season
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-ggplot(data = eth_seasons) +
+ggplot(data = eth_seasons %>% filter(!admin2Name_en %in% c("Min", "Max"))) +
   geom_sf(aes(fill = month(sen2_mon, label = TRUE), geometry = Shape)) + 
-  labs(title = "Start of senescence, Second season by Woreda",
+  labs(title = "Start of senescence, Second season by Zone",
        fill = "Month") 
 
 ```

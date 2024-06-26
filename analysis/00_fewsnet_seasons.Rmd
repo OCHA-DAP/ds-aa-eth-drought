@@ -144,8 +144,8 @@ write_csv(most_cover %>%
 
 zones_fewsnet <- most_cover %>%
   mutate(season = case_when(
-    LZTYPE %in% c("Cropping - Belg Dominant", "Pastoral", "Agropastoral") ~ "MAM/OND",
     LZTYPE %in% c("Cropping - Meher Dominant") | admin1Name_en %in% c("Gambela") ~ "JJAS",
+    LZTYPE %in% c("Cropping - Belg Dominant", "Pastoral", "Agropastoral") ~ "MAM/OND",
     .default = NA))
 
 jjas_zones_fewsnet <- zones_fewsnet %>%
