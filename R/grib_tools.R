@@ -26,7 +26,7 @@ grib_meta_table <- function(path) {
       lt = round(step_range / (24 * 30), 0),
       uid = row_number()
     ) |>
-    select(-grid_type, -packing_type, -level, -type_of_level, -centre, -edition)
+    dplyr::select(-grid_type, -packing_type, -level, -type_of_level, -centre, -edition)
   return(meta)
 }
 
