@@ -49,12 +49,10 @@ lr <- map2(
 
 # Handle Grib MetaData ----------------------------------------------------
 
-grib_files <- list.files(file.path(td, "ecmwf_gribs"), full.names = T)
+grib_files <- list.files(td, full.names = T)
 grib_files_filt <- str_subset(grib_files, pattern = run_mo)
 lr <- load_mf_ensemble_mean(file_paths = grib_files_filt)
 r <- rast(lr)
-
-
 
 
 # Write Rasters to Storage ------------------------------------------------
