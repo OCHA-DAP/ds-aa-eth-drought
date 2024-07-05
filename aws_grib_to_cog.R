@@ -6,7 +6,7 @@ library(glue)
 library(aws.s3)
 
 
-source("R/aws_tools.R")
+source("R/cloud_storage_tools.R")
 source("R/grib_tools.R")
 
 
@@ -25,17 +25,16 @@ bucket_df_filt <- bucket_df %>%
   filter(str_detect(date, run_mo))
 
 
+
+# Load Gribs --------------------------------------------------------------
+
+
 # loop through gribs, and read with rast()
 td <- file.path(tempdir(), "ecmwf_gribs")
 
 lr <- map2(
   bucket_df_filt$Key, bucket_df_filt$filename,
   \(keytmp, fntmp){
-    # fn <- file.path(
-    #   "ecmwf_gribs",
-    #   fntmp
-    # )
-
     fn <- file.path(
       td,
       fntmp
@@ -47,12 +46,18 @@ lr <- map2(
   }
 )
 
-# some tricky handling of meta data to sort out leadtimes/type metadata
+
+# Handle Grib MetaData ----------------------------------------------------
+
 grib_files <- list.files(file.path(td, "ecmwf_gribs"), full.names = T)
 grib_files_filt <- str_subset(grib_files, pattern = run_mo)
 lr <- load_mf_ensemble_mean(file_paths = grib_files_filt)
 r <- rast(lr)
 
+
+
+
+# Write Rasters to Storage ------------------------------------------------
 
 td_cog <- file.path(tempdir(), "ecmwf_cogs")
 pub_date <- floor_date(Sys.Date(), "month")
@@ -79,7 +84,7 @@ terra::writeRaster(
 )
 
 
-# upload to bucket dir
+## AWS Bucket ####
 aws.s3::put_object(
   file = cog_name,
   object = file.path(
@@ -87,6 +92,22 @@ aws.s3::put_object(
     cog_name
   ),
   bucket = Sys.getenv("BUCKET_NAME")
+)
+
+
+
+
+## Azure Blob ####
+es <- azure_endpoint_url()
+# storage endpoint
+se <- AzureStor::storage_endpoint(es, sas = Sys.getenv("DSCI_AZ_SAS_DEV"))
+sc_global <- AzureStor::storage_container(se, "global")
+
+
+AzureStor::upload_blob(
+  container = sc_global,
+  src = cog_name,
+  dest = paste0("raster/cogs/",cog_name)
 )
 
 unlink(cog_name)
