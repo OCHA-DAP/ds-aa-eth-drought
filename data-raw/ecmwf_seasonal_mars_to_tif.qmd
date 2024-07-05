@@ -1,0 +1,160 @@
+---
+title: "ecmwf_seasonal_mars_to_tif"
+format: html
+editor: visual
+---
+
+```{python}
+
+import xarray as xr
+import rioxarray as rxr
+import numpy as np
+# import matplotlib.pyplot as plt
+from scipy.interpolate import griddata
+from affine import Affine
+from pathlib import Path
+from rasterio.crs import CRS
+import os
+import datetime as datetime
+import glob
+import pandas as pd
+import rasterio
+
+DATA_DIR=Path(os.getenv("AA_DATA_DIR"))
+MARS_DIR = DATA_DIR/"private"/"raw"/"eth"/"ecmwf_seasonal"/"mars"
+OUT_DIR = DATA_DIR/"private"/"processed"/"eth"/"ecmwf_seasonal"/"seas51"/"mars"
+```
+
+```{python}
+fp_glob = glob.glob(f"{MARS_DIR}/*.grib")
+
+# this takes a minute
+ds = xr.open_mfdataset(fp_glob, 
+                     engine="cfgrib",
+                     drop_variables= ["surface","values"],
+                     backend_kwargs=dict(time_dims=('time','forecastMonth'))
+                    )
+
+```
+
+```{python}
+# ds.longitude.values
+# ds['longitude'] = (ds['longitude'] + 180) % 360 - 180
+ds["precip"]= ds["tprate"] * ds["time"].dt.days_in_month * 24 * 3600 * 1000
+ds=ds.drop_vars("tprate")
+
+# convert to DataArray
+da=ds["precip"]
+
+
+
+# take ensemble mean
+da_mean=da.mean(dim=["number"])
+da_mean.sel(forecastMonth=1).sel(time = "2022-03-01").values
+
+pub_dates = da_mean.time.values
+forecast_months = da_mean.forecastMonth.values
+
+# give a CRS
+da_mean = da_mean.rio.set_crs("EPSG:4326",inplace=True)
+```
+
+
+
+
+```{python}
+
+# da_mean.interp(
+#   latitude = da_mean.latitude.values.round(decimals= 1),
+#   longitude = da_mean.longitude.values.round(decimals= 1)
+# )
+# np.diff(da_mean.longitude.values)
+# da_mean.longitude.values.round(decimals=1)
+
+rRes = 0.4 
+points = list(zip(da_mean.longitude.values, da_mean.latitude.values))
+
+# trying rounding
+# xRange = np.arange(da_mean.longitude.min().round(decimals=1),
+# da_mean.longitude.max().round(decimals=1)+ rRes,rRes)
+# 
+# yRange = np.arange(da_mean.latitude.min().round(decimals=1), da_mean.latitude.max().round(decimals=1)+ rRes, rRes)
+
+# # trying NOT ROUNDING
+xRange = np.arange(da_mean.longitude.min(),
+da_mean.longitude.max()+ rRes,rRes)
+
+yRange = np.arange(da_mean.latitude.min(), da_mean.latitude.max()+ rRes, rRes)
+
+
+gridX,gridY = np.meshgrid(xRange, yRange)
+
+# define transform and CRS
+transform = Affine.translation(gridX[0][0]-rRes/2, gridY[0][0]-rRes/2)*Affine.scale(rRes,rRes)
+rasterCrs = CRS.from_epsg(4326)
+
+
+for pub_date in pub_dates:
+  da_filt=da_mean.sel(time=pub_date)
+  time_temp= pd.to_datetime(str(pub_date)) 
+  time_str_temp = time_temp.strftime('%Y-%m-%d')
+  print(time_str_temp)
+  out_raster = f"eth_seasonal-montly-mean_tprate-{time_str_temp}.tif"  # Use a single filename for each pub_date
+  out_path = OUT_DIR/out_raster
+  
+  # create forecast month vector to loop through
+  fms = da_filt.forecastMonth.values
+  with rasterio.open(out_path,
+  'w',
+  driver='GTiff',
+  height=gridX.shape[0],
+  width=gridX.shape[1],
+  count=len(fms),  # Set the number of bands based on fms
+  dtype=gridX.dtype,
+  crs={'init': 'epsg:4326'},
+  transform=transform
+  ) as dst:
+    for i, fm_temp in enumerate(fms):
+      print(fm_temp)
+      da_filt_lt = da_filt.sel(forecastMonth=fm_temp)
+      grid_ecmwf = griddata(points, da_filt_lt.values, (gridX, gridY), method='linear')
+      print(grid_ecmwf)
+      dst.write(grid_ecmwf, i+1) 
+      
+      
+      
+```
+
+```{r}
+library(terra)
+library(tidyverse)
+library(targets)
+library(sf)
+library(targets)
+
+mars_dir=file.path(
+  Sys.getenv("AA_DATA_DIR"),
+  "private","processed","eth","ecmwf_seasonal","seas51",
+  "mars")
+dir(mars_dir)
+
+
+# tar_load(gdf_aoi_adm)
+mar_files <- list.files(mars_dir, 
+                        pattern = "\\.tif$", 
+                        full.names = TRUE)
+
+
+
+library(rnaturalearth)
+eth <- ne_countries(country = "Ethiopia")
+# coasts <- ne_coastline()
+
+plot(coasts)
+plot(r[[1]],add=T)
+plot(coasts,add=T, fill=NULL)
+plot(eth,add=T, fill =NA)
+plot(eth)
+
+```
+
