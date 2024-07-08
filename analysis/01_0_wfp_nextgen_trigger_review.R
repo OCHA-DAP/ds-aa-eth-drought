@@ -15,6 +15,11 @@ gghdx()
 wfp_file_path <- file.path(
   Sys.getenv("AA_DATA_DIR"),
   "public", "raw", "eth", "wfp_nextgen", "WFP Data.xlsx")
+
+ecmwf_trigger_path <- file.path(
+  Sys.getenv("AA_DATA_DIR"),
+  "public", "exploration", "eth", "ecmwf", "ecmwf_trigger.xlsx")
+
 # Admin boundaries
 eth_adm3_codab <- st_read(
   file.path(
@@ -31,7 +36,7 @@ som_codab <- eth_adm3_codab |>
 
 # loading results from the Drought App for the Somali region
 # this excludes the Siti Zone
-ecmwf_results <- read_excel(wfp_file_path, sheet = "CHD")
+ecmwf_results <- read_excel(ecmwf_trigger_path, sheet = "CHD")
 
 #################### Probability of non exceedance
 ### months
