@@ -29,13 +29,6 @@ som_codab <- eth_adm3_codab |>
   summarise(woreda_num = n()) |>
   st_drop_geometry()
 
-# loading the WFP data
-wfp_data <- read_excel(wfp_file_path, sheet = "Z-July", col_names = FALSE)
-
-# extracting only the bad years data
-wfp_prob_df <- wfp_data[9:41,2] |>
-  rename(`Reported Bad Years` = `...2`)
-
 # loading results from the Drought App for the Somali region
 # this excludes the Siti Zone
 ecmwf_results <- read_excel(wfp_file_path, sheet = "CHD")
@@ -51,20 +44,29 @@ wfp_trigger_ls <- forecast_months |>
       as.character()
     zones <- zones[zones != "Siti"]
     # very rough data cleaning
+    # selecting years and reported bad years
     wfp_prob_df <- wfp_data[8:41,1:2]
+    # setting column names using row 8
     colnames(wfp_prob_df) <- wfp_prob_df[1, ]
+    # selecting the columns with the probability of non-exceedence
     wfp_prob_df <- wfp_prob_df[-1, ] |>
       bind_cols(wfp_data[9:41, seq(7, 35, 3)])
+    # adding zone names to columns
     colnames(wfp_prob_df)[3:12] <- zones 
+    # convert columns from character to numeric
     wfp_prob_df <- wfp_prob_df |>
       mutate(across(all_of(zones), as.numeric))
-    percentiles <- wfp_prob_df |>
-      summarise(across(all_of(zones), ~ quantile(., probs = 0.8, na.rm = T))) |>
-      unlist()
-    names(percentiles) <- gsub("\\.80%", "", names(percentiles))
+    # compute percentiles where 80% is the threshold, 
+    # since this is probability, 0% would be the year with the most rainfall
+    # 100% would indicate the year with the least rainfall
+    
+    #percentiles <- wfp_prob_df |>
+    #  summarise(across(all_of(zones), ~ quantile(., probs = 0.8, na.rm = T))) |>
+    #  unlist()
+    #names(percentiles) <- gsub("\\.80%", "", names(percentiles))
     # alternatively, use the triggers they have on the maproom
-    # percentiles <- wfp_data[7, seq(7, 35, 3)] |> as.numeric()
-    # percentiles <- setNames(percentiles, zones)
+    percentiles <- wfp_data[7, seq(7, 35, 3)] |> as.numeric()
+    percentiles <- setNames(percentiles, zones)
     
     # testing if WFP threshold would have activated
     wfp_events <- wfp_prob_df |>
