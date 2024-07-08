@@ -5,5 +5,8 @@
 
 .venv/*
 _targets/*
+
+data/*
+*.html
 venv/*
 .vscode
