@@ -59,9 +59,6 @@ forecast_months = da_mean.forecastMonth.values
 da_mean = da_mean.rio.set_crs("EPSG:4326",inplace=True)
 ```
 
-
-
-
 ```{python}
 
 # da_mean.interp(
@@ -157,4 +154,3 @@ plot(eth,add=T, fill =NA)
 plot(eth)
 
 ```
-

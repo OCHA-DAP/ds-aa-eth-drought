@@ -16,7 +16,7 @@ r_proj_file_paths <-  function(){
     CODAB_FP = file.path(
   Sys.getenv("AA_DATA_DIR"),
   "public","raw","eth","cod_ab",
-  "eth_adm_csa_bofedb_2021_shp"
+  "Admin_2024.gdb", "Admin_2024.gdb"
 ),
 
   GDB_ECMWF_MARS_TIFS = file.path(

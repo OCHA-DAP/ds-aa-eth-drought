@@ -6,3 +6,9 @@
 .venv/*
 *.grib
 _targets/*
+
+data/*
+*.html
+venv/*
+.vscode
+
