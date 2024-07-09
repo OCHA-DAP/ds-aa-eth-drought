@@ -6,8 +6,9 @@
 library(aws.s3)
 library(tidyverse)
 library(sf)
-library(raster)
+library(terra)
 library(arrow)
+library(readxl)
 library(exactextractr)
 library(gghdx)
 gghdx()
@@ -39,12 +40,16 @@ ond_zones <- c("ET0508", "ET0806", "ET0808", "ET0411", "ET0412", "ET0810", "ET05
                "ET0812", "ET0415", "ET0422")
 
 # read in MARS data at woreda level 
-adm3_forecast <- read_parquet("../TriggerApp2024/data/df_eth_mars_zonal_adm3.parquet")
-
+adm3_forecast <- read_parquet(
+  file.path(
+    Sys.getenv("AA_DATA_DIR"),
+    "public", "processed", "eth", "ecmwf_mars", "df_eth_mars_zonal_adm3.parquet")
+)
 # read in July Forecast
-july_forecast <- raster(paste0("s3://", Sys.getenv("BUCKET_NAME"), 
-                               "/ECMWF_COGS/202407-ECMWF_SEAS-V_i_a-ensemble_mean.tif"),
-                        band = 4)
+july_forecast <- terra::rast(
+  paste0("s3://", Sys.getenv("BUCKET_NAME"), 
+         "/ECMWF_COGS/202407-ECMWF_SEAS-V_i_a-ensemble_mean.tif")
+)
 
 # filter MARS data for OND released in July
 ond_forecast <- adm3_forecast |>
@@ -73,12 +78,14 @@ july_forecast_adm3 <- exact_extract(july_forecast_crop, eth_adm3_codab,
 
 # append these results to one object and get the overall season performance
 july_comparison <- july_forecast_adm3 |>
+  rowwise() |>
+  mutate(season_total = sum(`median.2024-07-01.3`, `median.2024-07-01.4`, `median.2024-07-01.5`)) |>
   merge(ond_forecast_lower20, by.x = "admin3Pcode", by.y = "adm3_pcode") |>
-  # Compute anomaly percentage relative to mean
+  # Check if value if below 20th percentile
   mutate(ond_inseason = if_else(admin2Pcode %in% ond_zones, T, F), 
          ond_woredas = if_else(admin2Pcode %in% ond_zones, woreda_lower20, NA),
-         ond_trigger = case_when(median > ond_woredas ~ "Above",
-                                 median <= ond_woredas ~ "Below",
+         ond_trigger = case_when(season_total > ond_woredas ~ "Above",
+                                 season_total <= ond_woredas ~ "Below",
                                  .default = NA))
 
 
@@ -88,8 +95,8 @@ trigger_check <- july_comparison |>
   merge(trigger_proposal, by.x = "admin3Name_en", by.y = "Woreda", all.x = T) |>
   rename(july_trigger = `...8`) |>
   mutate(trigger_check = case_when(
-    ond_inseason & median > july_trigger ~ "Not Reached",
-    ond_inseason & median <= july_trigger ~ "Reached",
+    ond_inseason & season_total > july_trigger ~ "Not Reached",
+    ond_inseason & season_total <= july_trigger ~ "Reached",
     .default = NA))
 
 trigger_check |>
@@ -110,9 +117,9 @@ trigger_test <- trigger_check |>
 
 trigger_status <- trigger_test$percentage[trigger_test$trigger_check == "Reached"]
 
-print(paste0("The trigger would have been reached since ", 
+print(paste0("The trigger would not have been reached since ", 
              round(trigger_status, 2), 
-             "% of the OND receiving area would have met the July trigger."))
+             "% of the OND receiving area would have had more rainfall than the July trigger."))
 
 # testing if ensemble mean would be below the 20%
 trigger_check |>
@@ -122,5 +129,5 @@ trigger_check |>
   scale_fill_manual(values = c("Above" = "steelblue", "Below" = "tomato"), 
                     na.value = "lightgrey") +
   labs(title = "July Forecast for OND",
-       subtitle = "Ensemble Mean versus 20% threshold of the ensemble mean",
+       subtitle = "July forecast ensemble mean versus 20th percentile of the historical ensemble mean",
        fill = "")
