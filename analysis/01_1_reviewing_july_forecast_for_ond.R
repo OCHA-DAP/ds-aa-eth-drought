@@ -71,7 +71,7 @@ ond_forecast_lower20 <- adm3_forecast |>
   summarise(woreda_lower20 = quantile(seasonal_total, 0.2, na.rm = T))
 
 # aggregate the july forecast for Ethiopia at admin 3
-july_forecast_crop <- crop(july_forecast, extent(eth_adm3_codab))
+july_forecast_crop <- crop(july_forecast, raster::extent(eth_adm3_codab))
 july_forecast_adm3 <- exact_extract(july_forecast_crop, eth_adm3_codab, 
                                     "median", append_cols = c("admin3Pcode", "admin2Pcode"))
 
@@ -79,7 +79,9 @@ july_forecast_adm3 <- exact_extract(july_forecast_crop, eth_adm3_codab,
 # append these results to one object and get the overall season performance
 july_comparison <- july_forecast_adm3 |>
   rowwise() |>
-  mutate(season_total = sum(`median.2024-07-01.3`, `median.2024-07-01.4`, `median.2024-07-01.5`)) |>
+  mutate(season_total = sum(`median.2024-07-01.3`, 
+                            `median.2024-07-01.4`, 
+                            `median.2024-07-01.5`, na.rm = T)) |>
   merge(ond_forecast_lower20, by.x = "admin3Pcode", by.y = "adm3_pcode") |>
   # Check if value if below 20th percentile
   mutate(ond_inseason = if_else(admin2Pcode %in% ond_zones, T, F), 
