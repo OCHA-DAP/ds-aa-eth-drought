@@ -113,7 +113,7 @@ zonal_ecmwf_mars <- function(r_wrapped = r_ecmwf_mars,
 #' load_mars_raster(gdb = gdb_ecmwf_mars_tifs)
 #' }
 load_mars_raster <- function(gdb = gdb_ecmwf_mars_tifs) {
-  rm_name <- "eth_seasonal-montly-mean_tprate-"
+  rm_name <- "eth_seasonal-monthly-mean_tprate-"
   fps <- list.files(
     path = gdb, pattern = "\\.tif$",
     full.names = T
