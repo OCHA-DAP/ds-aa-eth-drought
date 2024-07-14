@@ -47,7 +47,7 @@ wfp_trigger_ls <- forecast_months |>
     wfp_data <- read_excel(wfp_file_path, sheet = paste0("Z-", mon), col_names = FALSE)
     zones <- wfp_data[1, seq(3, 35, 3)] |>
       as.character()
-    zones <- zones[zones != "Siti"]
+    zones <- zones[!zones %in% c("Siti", "Fafan")]
     # very rough data cleaning
     # selecting years and reported bad years
     wfp_prob_df <- wfp_data[8:41,1:2]
@@ -55,9 +55,9 @@ wfp_trigger_ls <- forecast_months |>
     colnames(wfp_prob_df) <- wfp_prob_df[1, ]
     # selecting the columns with the probability of non-exceedence
     wfp_prob_df <- wfp_prob_df[-1, ] |>
-      bind_cols(wfp_data[9:41, seq(7, 35, 3)])
+      bind_cols(wfp_data[9:41, seq(10, 35, 3)])
     # adding zone names to columns
-    colnames(wfp_prob_df)[3:12] <- zones 
+    colnames(wfp_prob_df)[3:11] <- zones 
     # convert columns from character to numeric
     wfp_prob_df <- wfp_prob_df |>
       mutate(across(all_of(zones), as.numeric))
@@ -70,7 +70,7 @@ wfp_trigger_ls <- forecast_months |>
     #  unlist()
     #names(percentiles) <- gsub("\\.80%", "", names(percentiles))
     # alternatively, use the triggers they have on the maproom
-    percentiles <- wfp_data[7, seq(7, 35, 3)] |> as.numeric()
+    percentiles <- wfp_data[7, seq(10, 35, 3)] |> as.numeric()
     percentiles <- setNames(percentiles, zones)
     
     # testing if WFP threshold would have activated
