@@ -36,7 +36,7 @@ som_codab <- eth_adm3_codab |>
 
 # loading results from the Drought App for the Somali region
 # this excludes the Siti Zone
-ecmwf_results <- read_excel(ecmwf_trigger_path, sheet = "CHD")
+ecmwf_results <- read_excel(ecmwf_trigger_path, sheet = "Latest")
 
 #################### Probability of non exceedance
 ### months

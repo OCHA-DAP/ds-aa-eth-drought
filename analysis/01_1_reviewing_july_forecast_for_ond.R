@@ -30,7 +30,7 @@ eth_adm1_codab <- st_read(
 trigger_proposal <- read_excel(
   file.path(
     Sys.getenv("AA_DATA_DIR"),
-    "public", "exploration", "eth", "ecmwf", "trigger_proposal.xlsx"))
+    "public", "exploration", "eth", "ecmwf", "trigger_proposal.xlsx"), sheet = "Latest")
 
 # these are not decided on and change a lot but this is the list I came up with 
 # to be defined later
