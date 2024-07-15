@@ -127,7 +127,7 @@ trigger_check |>
   scale_fill_manual(values = c("Not Reached" = "steelblue", "Reached" = "tomato"), 
                     na.value = "lightgrey") +
   labs(title = "July Forecast for OND",
-       subtitle = "Checking if trigger would have been reached",
+       subtitle = "Checking if 1-in-5 year return period trigger would have been reached using July-Aug-Sep-Oct forecasts",
        fill = "July Trigger")
 
 trigger_test <- trigger_check |>
@@ -153,7 +153,7 @@ july_comparison |>
   labs(title = "July Forecast for OND",
        subtitle = "July forecast ensemble mean versus 20th percentile of the historical ensemble mean",
        fill = "") +
-  facet_wrap(vars(month))
+  facet_wrap(vars(factor(month, levels = month.name)))
 
 ond_below20_test <- july_comparison |>
   group_by(ond_below20, month) |>
