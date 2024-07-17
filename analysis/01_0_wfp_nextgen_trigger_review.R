@@ -131,7 +131,7 @@ tes |>
                fill = factor(name, levels = month.name)),
            stat = "identity", position = "stack") +
   labs(title = "Years different months would activate (WFP)",
-       subtitle = "High Severity at Zonal Level and Using the Risk Matrix",
+       subtitle = "High Severity at Zonal Level",
        x = "Year", y = "Month Activated", fill = "Month") +
   scale_x_continuous(breaks = seq(min(tes$Year), max(tes$Year), by = 5))
 
