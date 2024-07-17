@@ -109,6 +109,32 @@ wfp_trigger_df |>
        x = "Month", y = "Rate (%)") + 
   ylim(0,100)
 
+tes <- wfp_trigger_ls |>
+  map(\(mon_df){
+    mon_df |>
+      dplyr::select(Year, zone_num, metric)
+  }) |>
+  bind_cols() |>
+  rename(Year = `Year...1`, July = `zone_num...2`, August = `zone_num...5`, 
+         September = `zone_num...8`, July_metric = `metric...3`, 
+         August_metric = `metric...6`, September_metric = `metric...9`) |>
+  dplyr::select(-c(`Year...4`, `Year...7`))
+  
+
+tes |>
+  mutate(July = if_else(July > 0, 1 , 0),
+         August = if_else(August > 0, 1 , 0),
+         September = if_else(September > 0, 1 , 0)) |>
+  pivot_longer(cols = c(July, August, September)) |>
+  ggplot() +
+  geom_bar(aes(x = as.integer(Year), y = value, 
+               fill = factor(name, levels = month.name)),
+           stat = "identity", position = "stack") +
+  labs(title = "Years different months would activate (WFP)",
+       subtitle = "High Severity at Zonal Level and Using the Risk Matrix",
+       x = "Year", y = "Month Activated", fill = "Month") +
+  scale_x_continuous(breaks = seq(min(tes$Year), max(tes$Year), by = 5))
+
 ### selecting each year and comparing to trigger
 monthly_df <- wfp_trigger_ls |>
   map(\(df) df |> dplyr::select(Year, metric)) |>
