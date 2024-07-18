@@ -164,9 +164,11 @@ calculate_lt_activation <- function(woreda_rp_df, ond_forecast_df, percent_thres
 }
 lt_activation_df <- calculate_lt_activation(woreda_rp, 
                                             ond_forecast, 
-                                            percent_threshold = 0.2)
+                                            percent_threshold = 0.3)
 
+### removing July
 lt_activation_df |>
+  #filter(pub_month_name != "July") |>
   group_by(valid_year, pub_month_name, trigger_reached) |>
   summarise(count = sum(trigger_reached, na.rm = T)) |>
   mutate(pub_month_name = factor(pub_month_name, levels = month.name)) |>
@@ -180,6 +182,7 @@ lt_activation_df |>
 # getting metrics across time
 calculate_lt_metrics <- function(lt_activation_df, drought_years) {
   lt_metrics_df <- lt_activation_df |>
+    #filter(pub_month_name != "July") |>
     mutate(bad_year = valid_year %in% drought_years,
            metric = case_when(
              bad_year & trigger_reached ~ "TP",
@@ -206,12 +209,45 @@ calculate_lt_metrics <- function(lt_activation_df, drought_years) {
 calculate_lt_metrics(lt_activation_df, drought_years)
 calculate_lt_metrics(lt_activation_df, era5_drought_years)
 
+########## 
+## computing the overall
+
+ras <- lt_activation_df |>
+  #filter(pub_month_name != "July") |>
+  group_by(valid_year) |>
+  summarise(trigger_reached = any(trigger_reached)) |>
+  mutate(bad_year = valid_year %in% drought_years,
+         metric = case_when(
+           bad_year & trigger_reached ~ "TP",
+           !bad_year & trigger_reached ~ "FP",
+           bad_year & !trigger_reached ~ "FN",
+           !bad_year & !trigger_reached ~ "TN",
+           TRUE ~ NA_character_
+         )) |>
+  summarise(
+    act_rate = sum(trigger_reached, na.rm = T),
+    TP_count = sum(metric == "TP", na.rm = TRUE),
+    FP_count = sum(metric == "FP", na.rm = TRUE),
+    FN_count = sum(metric == "FN", na.rm = TRUE),
+    TN_count = sum(metric == "TN", na.rm = TRUE),
+    hit_rate = TP_count / (TP_count + FN_count),
+    miss_rate = FN_count / (TP_count + FN_count),
+    false_alarm_rate = FP_count / (TN_count + FP_count)
+  ) |>
+  ungroup()
+
+paste0("The Overall Return Period is 1-in-", round(total_years / ras$act_rate, 1), " years.")
+paste0("The Overall Rate of Activation is ", round(ras$act_rate, 1), "%.")
+paste0("The Overall Hit Rate is ", round(ras$hit_rate *100, 1), "%.")
+paste0("The Overall Miss Rate is ", round(ras$miss_rate *100, 1), "%.")
+paste0("The Overall False Alarm Rate is ", round(ras$false_alarm_rate*100, 1), "%.")
+
 
 ############### 
 ####################### Testing setting the trigger using only the Jul-Sep forecasts
 ecmwf_triggers <- ond_forecast |>
   group_by(adm3_pcode, adm3_en, pub_month_name) |>
-  summarise(triggers = quantile(seasonal_total, 0.2, na.rm = T))
+  summarise(triggers = quantile(seasonal_total, 0.15, na.rm = T))
 
 # testing with 2024 forecast
 july_trigger <- july_forecast_adm3 |>
@@ -225,7 +261,7 @@ july_trigger <- july_forecast_adm3 |>
   summarise(seasonal_forecast = sum(monthly_forecast, na.rm = T)) |>
   merge((ecmwf_triggers |> filter(pub_month_name == "July")), 
         by.x = "admin3Pcode", by.y = "adm3_pcode", all.y = T) |>
-  mutate(threshold_reached = if_else(seasonal_forecast > triggers, "Not Reached", "Reached"))
+  mutate(threshold_reached = if_else(seasonal_forecast > triggers, "Above", "Below"))
 
 
 july_trigger |>
@@ -234,21 +270,21 @@ july_trigger |>
          threshold_reached = if_else(is.na(threshold_reached), "Out of Season", threshold_reached)) |>
   ggplot() +
   geom_sf(aes(fill = factor(threshold_reached, 
-                            levels = c("Reached", "Not Reached", "Out of Season")), 
+                            levels = c("Below", "Above", "Out of Season")), 
               geometry = Shape)) + 
   geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
-  scale_fill_manual(values = c("Not Reached" = "steelblue", 
-                               "Reached" = "tomato", 
+  scale_fill_manual(values = c("Above" = "steelblue", 
+                               "Below" = "tomato", 
                                "Out of Season" = "lightgrey"), 
                     na.value = "lightgrey") +
-  labs(title = "Oct-Dec Season Trigger based on the July ECMWF Forecast",
-       subtitle = "Assessing if the July forecast would have met a 1-in-5 year return period",
-       #caption = "Analysis conducted on Severity 4 Zones",
-       fill = "Trigger Status")
+  labs(title = "Oct-Dec 2024 Season based on the July ECMWF Forecast",
+       subtitle = "Assessing Forecasts for July 2024: Rainfall Below a 1-in-5 Year Return Period",
+       caption = "Analysis conducted on Southern Pastoral areas",
+       fill = "Status")
 
 ### getting percent of woredas where trigger is reached
 july_trigger |>
-  summarise(mean(threshold_reached == "Reached", na.rm=T))
+  summarise(mean(threshold_reached == "Below", na.rm=T))
 
 ################## 
 ### Without October
@@ -696,7 +732,7 @@ calculate_ecmwf_triggers_monthly <- function(ond_forecast, drought_years, total_
 }
 
 
-quantile_values <- c("July" = 0.1, "August" = 0.07,
+quantile_values <- c("July" = 0.08, "August" = 0.07,
                      "September" = 0.075, "October" = 0.1)
 # Create a named vector for metric labels
 metric_labels <- c(
