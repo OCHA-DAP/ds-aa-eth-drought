@@ -71,4 +71,4 @@ ond_woredas_triggered |>
   scale_fill_manual(values = c("Severe" = "tomato", "Moderate" = "orange"), na.value = "lightgrey", na.translate = FALSE) +
   labs(title = "OND 2024 Drought Trigger Status in Ethiopia",
        subtitle = "Evaluated Using July Forecast with a 3-Month Lead Time",
-       fill = "Drought Trigger Severity")
+       fill = "Drought Severity Triggered")
