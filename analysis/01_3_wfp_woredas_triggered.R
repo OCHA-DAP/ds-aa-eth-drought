@@ -43,10 +43,9 @@ ond_woredas_triggered |>
   ggplot() +
   geom_sf(aes(fill = `Triggered?`, geometry = Shape)) + 
   geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
-  scale_fill_manual(values = c("Yes" = "tomato"), 
-                    na.value = "lightgrey") +
-  labs(title = "WFP Trigger for Moderate Drought using July Forecast for OND",
-       subtitle = "Evaluating whether the trigger has been reached using the 3-month lead time forecast")
+  scale_fill_manual(values = c("Yes" = "tomato"), na.translate = FALSE) +
+  labs(title = "Moderate Drought Trigger Status for OND 2024 in Ethiopia",
+       subtitle = "Based on July Forecast with a 3-Month Lead Time")
   
 # severe areas triggered
 ond_woredas_triggered |>
@@ -55,7 +54,6 @@ ond_woredas_triggered |>
   ggplot() +
   geom_sf(aes(fill = `Triggered?`, geometry = Shape)) + 
   geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
-  scale_fill_manual(values = c("Yes" = "tomato"), 
-                    na.value = "lightgrey") +
-  labs(title = "WFP Trigger for Severe Drought using July Forecast for OND",
-       subtitle = "Evaluating whether the trigger has been reached using the 3-month lead time forecast")
+  scale_fill_manual(values = c("Yes" = "tomato"), na.translate = FALSE) +
+  labs(title = "Severe Drought Trigger Status for OND 2024 in Ethiopia",
+       subtitle = "Based on July Forecast with a 3-Month Lead Time")
