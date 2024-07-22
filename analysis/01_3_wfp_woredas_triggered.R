@@ -4,6 +4,7 @@
 # libraries
 library(tidyverse)
 library(sf)
+library(AzureStor)
 library(gghdx)
 gghdx()
 
@@ -21,15 +22,20 @@ eth_adm1_codab <- st_read(
   layer = "eth_admbnda_adm1_csa_bofedb_2024")
 
 # reading in files
-somali_region_woredas <- read_csv(file.path(
-  Sys.getenv("CERF_AA_DIR"),
-  "Ethiopia", "2024", "Potential Activation", 
-  "AA Dashboard - Somali Region, OND Season.csv"))
-
-oromia_region_woredas <- read_csv(file.path(
-  Sys.getenv("CERF_AA_DIR"),
-  "Ethiopia", "2024", "Potential Activation", 
-  "AA Dashboard - Southern Oromia Region, OND Season.csv"))
+# i am sure there are better ways of downloading multiple files
+blob_endpoint <- storage_endpoint("https://imb0chd0dev.blob.core.windows.net", 
+                                  key = Sys.getenv("AZURE_BLOB_KEY1"))
+container <- storage_container(blob_endpoint, "projects")
+som_temp_file <- tempfile(fileext = ".csv")
+somali_csv_blob <- storage_download(container, 
+                                    src = "ds-aa-eth-drought/exploration/AA Dashboard - Somali Region, OND Season.csv", 
+                                    dest = som_temp_file)
+somali_region_woredas <- read_csv(som_temp_file)
+oro_temp_file <- tempfile(fileext = ".csv")
+oromia_csv_blob <- storage_download(container, 
+                                    src = "ds-aa-eth-drought/exploration/AA Dashboard - Southern Oromia Region, OND Season.csv", 
+                                    dest = oro_temp_file)
+oromia_region_woredas <- read_csv(oro_temp_file)
 
 # plotting woredas where moderate trigger is reached
 ond_woredas_triggered <- somali_region_woredas |>
