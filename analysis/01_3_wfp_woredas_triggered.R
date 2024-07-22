@@ -68,7 +68,8 @@ ond_woredas_triggered |>
   ggplot() + 
   geom_sf(aes(fill = Severity, geometry = Shape)) + 
   geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
-  scale_fill_manual(values = c("Severe" = "tomato", "Moderate" = "orange"), na.value = "lightgrey", na.translate = FALSE) +
-  labs(title = "OND 2024 Drought Trigger Status in Ethiopia",
-       subtitle = "Evaluated Using July Forecast with a 3-Month Lead Time",
-       fill = "Drought Severity Triggered")
+  scale_fill_manual(values = c("Severe" = "tomato", "Moderate" = "orange"),
+                    labels = c("Moderate (1-in-3 year event)", "Severe (1-in-5 year event)"), na.value = "lightgrey", na.translate = FALSE) +
+  labs(title = "OND 2024 Forecast for Ethiopia",
+       subtitle = "Evaluated Using the July EMI forecast with a 3-Month Lead Time",
+       fill = "Drought Severity Category")
