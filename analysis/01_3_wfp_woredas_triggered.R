@@ -57,3 +57,18 @@ ond_woredas_triggered |>
   scale_fill_manual(values = c("Yes" = "tomato"), na.translate = FALSE) +
   labs(title = "Severe Drought Trigger Status for OND 2024 in Ethiopia",
        subtitle = "Based on July Forecast with a 3-Month Lead Time")
+
+# Combine moderate and severe areas
+ond_woredas_triggered |>
+  group_by(Woreda) |>
+  arrange(desc(Severity)) |> # to ensure severe comes before moderate
+  slice(1) |>
+  merge(eth_adm3_codab, by.x = "Woreda", by.y = "admin3Name_en", all.y = TRUE) |>
+  mutate(Severity = ifelse(is.na(Severity), NA, Severity)) |>
+  ggplot() + 
+  geom_sf(aes(fill = Severity, geometry = Shape)) + 
+  geom_sf(data = eth_adm1_codab, fill = NA, linewidth = 0.8, color = "black") +
+  scale_fill_manual(values = c("Severe" = "tomato", "Moderate" = "orange"), na.value = "lightgrey", na.translate = FALSE) +
+  labs(title = "OND 2024 Drought Trigger Status in Ethiopia",
+       subtitle = "Evaluated Using July Forecast with a 3-Month Lead Time",
+       fill = "Drought Trigger Severity")
