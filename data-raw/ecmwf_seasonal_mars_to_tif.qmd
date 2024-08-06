@@ -96,7 +96,7 @@ for pub_date in pub_dates:
   time_temp= pd.to_datetime(str(pub_date)) 
   time_str_temp = time_temp.strftime('%Y-%m-%d')
   print(time_str_temp)
-  out_raster = f"eth_seasonal-montly-mean_tprate-{time_str_temp}.tif"  # Use a single filename for each pub_date
+  out_raster = f"eth_seasonal-monthly-mean_tprate-{time_str_temp}.tif"  # Use a single filename for each pub_date
   out_path = OUT_DIR/out_raster
   
   # create forecast month vector to loop through
