@@ -6,6 +6,9 @@ library(aws.s3)
 library(tidyverse)
 library(readxl)
 library(arrow)
+library(sf)
+library(raster)
+library(exactextractr)
 library(gghdx)
 gghdx()
 
@@ -164,7 +167,7 @@ calculate_lt_activation <- function(woreda_rp_df, ond_forecast_df, percent_thres
 }
 lt_activation_df <- calculate_lt_activation(woreda_rp, 
                                             ond_forecast, 
-                                            percent_threshold = 0.3)
+                                            percent_threshold = 0.2)
 
 ### removing July
 lt_activation_df |>
