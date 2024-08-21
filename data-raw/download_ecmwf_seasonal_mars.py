@@ -58,7 +58,7 @@ for year in range(start_year, end_year):
     else:
         number_use = "/".join([str(i) for i in range(51)])
 
-    grid_setup = "0.4/0/.4"
+    grid_setup = "0.4/0.4"
     server.execute(
         {
             "class": "od",

@@ -101,21 +101,21 @@ zonal_ecmwf_mars <- function(r_wrapped = r_ecmwf_mars,
 #' library(targets)
 #' tar_source
 #'
-#' gdb_ecmwf_mars_tifs <- file.path(
-#'   Sys.getenv("AA_DATA_DIR"),
-#'   "private",
-#'   "processed",
-#'   "eth",
-#'   "ecmwf_seasonal",
-#'   "seas51",
-#'   "mars"
-#' )
+gdb_ecmwf_mars_tifs <- file.path(
+   Sys.getenv("AA_DATA_DIR"),
+   "private",
+   "processed",
+   "eth",
+   "ecmwf_seasonal",
+   "seas51",
+   "mars"
+)
 #' load_mars_raster(gdb = gdb_ecmwf_mars_tifs)
 #' }
 load_mars_raster <- function(gdb = gdb_ecmwf_mars_tifs) {
-  rm_name <- "eth_seasonal-montly-mean_tprate-"
+  rm_name <- "eth_seasonal-monthly-mean_tprate-"
   fps <- list.files(
-    path = gdb, pattern = "\\.tif$",
+    path = gdb, pattern = paste0("^", rm_name, ".*\\.tif$"),
     full.names = T
   )
   r <- rast(fps)
