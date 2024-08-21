@@ -10,7 +10,7 @@ gghdx()
 
 # reading in admin boundaries
 blob_endpoint <- storage_endpoint(Sys.getenv("AZURE_BLOB_ENDPOINT"), 
-                                  key = Sys.getenv("AZURE_BLOB_KEY1"))
+                                  sas = Sys.getenv("DSCI_AZ_SAS_DEV"))
 container <- storage_container(blob_endpoint, "projects")
 cod_ab_file <- tempfile(fileext = ".gpkg")
 eth_codab_blob <- storage_download(container, 
@@ -63,6 +63,7 @@ ond_woredas_triggered |>
 
 # Combine moderate and severe areas
 ond_woredas_triggered |>
+  filter(`Triggered?` == "Yes") |>
   group_by(Woreda) |>
   arrange(desc(Severity)) |> # to ensure severe comes before moderate
   slice(1) |>
@@ -75,4 +76,4 @@ ond_woredas_triggered |>
                     labels = c("Moderate (1-in-3 year event)", "Severe (1-in-5 year event)"), na.value = "lightgrey", na.translate = FALSE) +
   labs(title = "OND 2024 Forecast for Ethiopia",
        subtitle = "Evaluated Using the July EMI forecast with a 3-Month Lead Time",
-       fill = "Drought Severity Category")
+       fill = "Drought Severity")
