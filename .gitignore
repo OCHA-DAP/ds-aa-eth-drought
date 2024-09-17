@@ -12,3 +12,6 @@ data/*
 venv/*
 .vscode
 
+*/data/*
+.env
+
