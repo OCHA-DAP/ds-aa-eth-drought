@@ -17,13 +17,13 @@ gghdx()
 eth_adm3_codab <- st_read(
   file.path(
     Sys.getenv("AA_DATA_DIR"),
-    "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"), 
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gpkg"), 
   layer = "eth_admbnda_adm3_csa_bofedb_2024")
 
 eth_adm1_codab <- st_read(
   file.path(
     Sys.getenv("AA_DATA_DIR"),
-    "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"), 
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gpkg"), 
   layer = "eth_admbnda_adm1_csa_bofedb_2024")
 
 # copied this from the drought app

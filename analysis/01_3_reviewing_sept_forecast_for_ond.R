@@ -17,14 +17,14 @@ gghdx()                 # Activate HDX theme for consistent styling
 eth_adm3_codab <- st_read(
   file.path(
     Sys.getenv("AA_DATA_DIR"),  # Retrieve the path to data directory from environment variables
-    "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"),  # File path to GeoDatabase
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gpkg"),  # File path to GeoDatabase
   layer = "eth_admbnda_adm3_csa_bofedb_2024")  # Layer for admin 3 boundaries
 
 # Read Ethiopia's admin level 1 (regional) boundaries from the same GeoDatabase file
 eth_adm1_codab <- st_read(
   file.path(
     Sys.getenv("AA_DATA_DIR"),
-    "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"),
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gpkg"),
   layer = "eth_admbnda_adm1_csa_bofedb_2024")  # Layer for admin 1 boundaries
 
 # Define OND zones manually, as these are subject to change
