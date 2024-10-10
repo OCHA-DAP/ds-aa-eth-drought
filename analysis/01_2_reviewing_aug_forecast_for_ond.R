@@ -1,4 +1,4 @@
-# This script looks at the July Forecast for OND in Ethiopia
+# This script looks at the August Forecast for OND in Ethiopia
 # It checks if the forecast is below normal.
 # Also checks if the tentative triggers have been reached.
 
@@ -17,13 +17,13 @@ gghdx()
 eth_adm3_codab <- st_read(
   file.path(
     Sys.getenv("AA_DATA_DIR"),
-    "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"), 
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gpkg"), 
   layer = "eth_admbnda_adm3_csa_bofedb_2024")
 
 eth_adm1_codab <- st_read(
   file.path(
     Sys.getenv("AA_DATA_DIR"),
-    "public", "raw", "eth", "cod_ab", "Admin_2024.gdb.zip"), 
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gpkg"), 
   layer = "eth_admbnda_adm1_csa_bofedb_2024")
 
 # copied this from the drought app
@@ -58,7 +58,7 @@ aug_forecast <- terra::rast(
          "/ECMWF_COGS/202408-ECMWF_SEAS-V_i_a-ensemble_mean.tif")
 )
 
-# filter MARS data for OND released in July
+# filter MARS data for OND released in August
 ond_forecast <- adm3_forecast |>
   dplyr::filter(pub_month == 8 & valid_month %in% c(10, 11, 12)) |>
   mutate(year = year(valid_date)) |>
@@ -87,7 +87,7 @@ ond_forecast_lower20_monthly <- adm3_forecast |>
   summarise(woreda_lower20 = quantile(monthly_total, 0.2, na.rm = T)) |>
   mutate(month = month.name[valid_month])
 
-# aggregate the july forecast for Ethiopia at admin 3
+# aggregate the August forecast for Ethiopia at admin 3
 aug_forecast_crop <- crop(aug_forecast, raster::extent(eth_adm3_codab))
 aug_forecast_adm3 <- exact_extract(aug_forecast_crop, eth_adm3_codab, 
                                     "median", append_cols = c("admin3Pcode", "admin2Pcode"))
@@ -145,7 +145,7 @@ trigger_check |>
   scale_fill_manual(values = c("Not Reached" = "steelblue", "Reached" = "tomato"), 
                     na.value = "lightgrey") +
   labs(title = "August Forecast for OND",
-       subtitle = "Checking if 1-in-5 year return period trigger would have been reached using July-Aug-Sep-Oct forecasts",
+       subtitle = "Checking if 1-in-5 year return period trigger would have been reached using August-Aug-Sep-Oct forecasts",
        fill = "August Trigger")
 
 trigger_test <- trigger_check |>
@@ -244,7 +244,7 @@ ond_below20_test_season |>
   walk(print)
 
 ## It looks like the trigger, if set using the 20% percentile for forecasts released,
-## in July would have activated. 
+## in August would have activated. 
 ## If setting an overall frequency of activation of 20% across lead times,
 ## Then the RP would be less frequent. 
 ## This is looking at 20% at one lead time and would activate if following WFP methodology
