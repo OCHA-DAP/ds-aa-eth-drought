@@ -8,13 +8,18 @@ data_dir <- Sys.getenv("AA_DATA_DIR")
 exploration_dir <- file.path(data_dir, "public", "exploration", "eth")
 
 # Read administrative boundaries for Ethiopia at Admin 3 level
-eth_adm3_codab <- st_read(
+eth_adm2_codab <- st_read(
   file.path(
     Sys.getenv("AA_DATA_DIR"),    # Get base data directory from environment variable
     "public", "raw", "eth", "cod_ab", "Admin_2024.gpkg"), 
-  layer = "eth_admbnda_adm3_csa_bofedb_2024"  # Specify layer to read
+  layer = "eth_admbnda_adm2_csa_bofedb_2024"  # Specify layer to read
 )
-
+eth_adm1_codab <- st_read(
+  file.path(
+    Sys.getenv("AA_DATA_DIR"),    # Get base data directory from environment variable
+    "public", "raw", "eth", "cod_ab", "Admin_2024.gpkg"), 
+  layer = "eth_admbnda_adm1_csa_bofedb_2024"  # Specify layer to read
+)
 # Define a vector of raster file names for phenological masks
 pheno_vec <- c("asap_mask_crop_v03.tif", "asap_mask_rangeland_v03.tif")
 
