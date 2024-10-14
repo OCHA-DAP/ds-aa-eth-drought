@@ -102,11 +102,38 @@ wfp_trigger_df <- wfp_trigger_ls |>
 # plotting Performance Metrics for WFP trigger at each lead time
 wfp_trigger_df |>  
   ggplot() +
-  geom_line(aes(x = factor(month, levels = month.name), y = Value * 100, color = Metric, group = Metric), linewidth = 1) + 
+  geom_line(aes(x = factor(month, levels = month.name), 
+                y = Value * 100, color = Metric, group = Metric), linewidth = 1) + 
   labs(title = "Performance Metrics over Lead Time",
        subtitle = "Forecast Release month targetting OND Season", 
        x = "Month", y = "Rate (%)") + 
   ylim(0,100)
+
+tes <- wfp_trigger_ls |>
+  map(\(mon_df){
+    mon_df |>
+      dplyr::select(Year, zone_num, metric)
+  }) |>
+  bind_cols() |>
+  rename(Year = `Year...1`, July = `zone_num...2`, August = `zone_num...5`, 
+         September = `zone_num...8`, July_metric = `metric...3`, 
+         August_metric = `metric...6`, September_metric = `metric...9`) |>
+  dplyr::select(-c(`Year...4`, `Year...7`))
+  
+
+tes |>
+  mutate(July = if_else(July > 0, 1 , 0),
+         August = if_else(August > 0, 1 , 0),
+         September = if_else(September > 0, 1 , 0)) |>
+  pivot_longer(cols = c(July, August, September)) |>
+  ggplot() +
+  geom_bar(aes(x = as.integer(Year), y = value, 
+               fill = factor(name, levels = month.name)),
+           stat = "identity", position = "stack") +
+  labs(title = "Years different months would activate (WFP)",
+       subtitle = "High Severity at Zonal Level",
+       x = "Year", y = "Month Activated", fill = "Month") +
+  scale_x_continuous(breaks = seq(min(tes$Year), max(tes$Year), by = 5))
 
 ### selecting each year and comparing to trigger
 monthly_df <- wfp_trigger_ls |>
@@ -143,13 +170,14 @@ combined_df <- monthly_df |>
                              .default = NA)) |>
   # bind_cols(wfp_prob_df) |>
   merge(ecmwf_results, all.y = T) |>
-  mutate(wfp_metric = case_when(overall == "Yes" & !is.na(`Drought Years`) ~ "TP",
-                   overall == "Yes" & is.na(`Drought Years`) ~ "FP",
-                   overall == "No" & !is.na(`Drought Years`) ~ "FN",
-                   overall == "No" & is.na(`Drought Years`) ~ "TN",
-                   .default = NA),
-         wfp_activated = if_else(overall %in% c("Yes"), 1, 0),
-         ecmwf_activated = if_else(Metrics %in% c("TP", "FP"), 1, 0) * -1)
+  mutate(wfp_metric = case_when(
+    overall == "Yes" & !is.na(`Drought Years`) ~ "TP",
+    overall == "Yes" & is.na(`Drought Years`) ~ "FP",
+    overall == "No" & !is.na(`Drought Years`) ~ "FN",
+    overall == "No" & is.na(`Drought Years`) ~ "TN",
+    .default = NA),
+    wfp_activated = if_else(overall %in% c("Yes"), 1, 0),
+    ecmwf_activated = if_else(Metrics %in% c("TP", "FP"), 1, 0) * -1)
 
 # what is the overall RP?
 total_years <- 2022-1991+1
@@ -160,6 +188,22 @@ overall_rate <- overall_act / total_years
 
 paste0("The Overall Return Period is 1-in-", round(overall_rp, 1), " years.")
 paste0("The Overall Rate of Activation is ", round(overall_rate*100, 1), "%.")
+paste0("The Overall Hit Rate is ", 
+       round((sum(combined_df$wfp_metric == "TP", na.rm = T)/
+                (sum(combined_df$wfp_metric == "TP", 
+                     combined_df$wfp_metric == "FN", na.rm = T)))*100, 1), 
+       "%.")
+paste0("The Overall Miss Rate is ", 
+       round((sum(combined_df$wfp_metric == "FN", na.rm = T)/
+                (sum(combined_df$wfp_metric == "TP", 
+                     combined_df$wfp_metric == "FN", na.rm = T)))*100, 1), 
+       "%.")
+paste0("The Overall False Alarm Rate is ", 
+       round((sum(combined_df$wfp_metric == "FP", na.rm = T)/
+                (sum(combined_df$wfp_metric == "FP", 
+                     combined_df$wfp_metric == "TN", na.rm = T)))*100, 1), 
+       "%.")
+
 
 # plotting years where either ECMWF or WFP would have activated based on 1-in-3
 combined_df |>
@@ -182,3 +226,35 @@ combined_df |>
         axis.text.y = element_blank(),
         axis.text.x = element_text(size = 14))
   
+## adding an evaluation where we do not wait to act 
+## we act when forecasts are released
+normal_act <- combined_df |> 
+  mutate(activation = case_when(July == "Yes" | August == "Yes" | September == "Yes" ~ "Yes",
+                                .default = "No"),
+         norm_metric = case_when(activation == "Yes" & !is.na(`Drought Years`) ~ "TP",
+                                 activation == "Yes" & is.na(`Drought Years`) ~ "FP",
+                                 activation == "No" & !is.na(`Drought Years`) ~ "FN",
+                                 activation == "No" & is.na(`Drought Years`) ~ "TN",
+                                 .default = NA)) 
+
+normal_rp <- total_years / (normal_act |> summarise(sum(activation == "Yes", na.rm = T)))
+normal_rate <- (normal_act |> summarise(sum(activation == "Yes", na.rm = T))) / total_years
+
+paste0("The Return Period is 1-in-", round(normal_rp, 1), " years.")
+paste0("The Rate of Activation is ", round(normal_rate*100, 1), "%.")
+paste0("The Hit Rate is ", 
+       round((sum(normal_act$norm_metric == "TP", na.rm = T)/
+                (sum(normal_act$norm_metric == "TP", 
+                     normal_act$norm_metric == "FN", na.rm = T)))*100, 1), 
+       "%.")
+paste0("The Miss Rate is ", 
+       round((sum(normal_act$norm_metric == "FN", na.rm = T)/
+                (sum(normal_act$norm_metric == "TP", 
+                     normal_act$norm_metric == "FN", na.rm = T)))*100, 1), 
+       "%.")
+paste0("The False Alarm Rate is ", 
+       round((sum(normal_act$norm_metric == "FP", na.rm = T)/
+                (sum(normal_act$norm_metric == "FP", 
+                     normal_act$norm_metric == "TN", na.rm = T)))*100, 1), 
+       "%.")
+
