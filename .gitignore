@@ -14,4 +14,7 @@ venv/*
 
 */data/*
 .env
+charts/*
+analysis/.ipynb_checkpoints/*
 
+*/.DS_Store
