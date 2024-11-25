@@ -148,14 +148,15 @@ eth_adm2 <- st_read(
 ```R
 # Get the PiN data and join with the geodataframe
 df_pin_fs <- read_excel(
-    path = file.path(Sys.getenv("AA_DATA_DIR"), "public", "exploration", "eth", "pin", "Food Security_PIN_Severity_2024.xlsx"),
+    path = file.path(Sys.getenv("AA_DATA_DIR"), "public", "exploration", "eth", "pin", "Food Security PIN and severity 2025.xlsx"),
     skip = 1,  
     col_names = TRUE,
-    sheet = "Cluster PiN"
+    sheet = "WS - 3.1 PIN"
 ) %>% 
+    filter(`Population Group` != "IDPs") %>%
     group_by(`Admin 2 P-Code`) %>%
-    summarise(FoodSecPin2024 = sum(`Cluster PiN`, na.rm = TRUE)) %>%
-    select("Admin 2 P-Code", "FoodSecPin2024")
+    summarise(FoodSecPin2025 = sum(`Food Security Cluster`, na.rm = TRUE)) %>%
+    select("Admin 2 P-Code", "FoodSecPin2025")
 
 df_pin <- read_excel(
     file.path(
@@ -178,10 +179,10 @@ gdf_adm2 <- eth_adm2 %>%
 
 ```R
 ggplot(data = gdf_adm2) +
-  geom_sf(aes(fill = FoodSecPin2024), linewidth=0.1, color="white") +
+  geom_sf(aes(fill = FoodSecPin2025), linewidth=0.1, color="white") +
   scale_fill_distiller(palette = "Reds", direction = 1) + 
   # font_sizing +
-  labs(title = "2024 Ethiopia People in Need (PiN) - Food Security Cluster",
+  labs(title = "2025 Ethiopia People in Need (PiN) - Food Security Cluster (excluding IDPs)",
        subtitle = "Aggregated by zone", 
        fill = "PiN")
 ```
@@ -239,17 +240,17 @@ gdf_ond_mam <- gdf_adm2 %>%
 
 ```R
 # Find max value between both variables for consistent scale
-max_pin <- max(max(gdf_ond_mam$FoodSecPin2024, na.rm = TRUE), 
+max_pin <- max(max(gdf_ond_mam$FoodSecPin2025, na.rm = TRUE), 
                max(gdf_ond_mam$TotalPin, na.rm = TRUE))
 
 # Create first map - Food Security PiN
 p1 <- ggplot() +
     geom_sf(data = gdf_adm2, fill = "lightgrey", color = "white") +
-    geom_sf(data = gdf_ond_mam, aes(fill = FoodSecPin2024), color = "white") +
+    geom_sf(data = gdf_ond_mam, aes(fill = FoodSecPin2025), color = "white") +
     scale_fill_distiller(palette = "Reds", direction = 1, 
                         labels = label_comma(),
                         limits = c(0, max_pin)) + 
-    labs(title = "Food Security PiN 2024",
+    labs(title = "Food Security PiN 2025 (excluding IDPs)",
          subtitle = "Across zones estimated to experience MAM rainfall season",
          fill = "PiN") + 
     font_sizing +  
@@ -279,15 +280,15 @@ p2 <- ggplot() +
 # Combine maps side by side
 p1 + p2
 
-ggsave("../charts/fs_combined_pin_targeted_zones.png", width = 20, height = 10)
+ggsave("../charts/fs_comparison.png", width = 20, height = 10)
 ```
 
 ```R
 ggplot() +
     geom_sf(data = gdf_adm2, fill = "lightgrey", color = "white") +
-    geom_sf(data = gdf_ond_mam, aes(fill = FoodSecPin2024), color = "white") +
+    geom_sf(data = gdf_ond_mam, aes(fill = FoodSecPin2025), color = "white") +
     scale_fill_distiller(palette = "Reds", direction = 1, labels = label_comma()) + 
-    labs(title = "2025 Ethiopia People in Need (PiN) - Food Security Cluster",
+    labs(title = "2025 Ethiopia People in Need (PiN) - Food Security Cluster (excluding IDPs)",
        subtitle = "Across zones estimated to experience MAM rainfall season",
        fill = "PiN") + 
     font_sizing +  
@@ -539,11 +540,11 @@ df_affected_summary$year <- factor(df_affected_summary$year, levels = df_affecte
 ggplot(df_affected_summary, aes(x=year, y=total_affected)) + 
     geom_bar(fill = hdx_hex("sapphire-hdx"), stat="identity") +
     scale_y_continuous(labels = comma_format(big.mark = ",")) +
-    labs(x="Year", y="Total PiN", title="Total Food Security PiN affected during below average MAM rainfall in Ethiopia") +
+    labs(x="Year", y="Total PiN", title="Total Food Security PiN (IDPs excluded) affected") +
     coord_flip() + 
     font_sizing
 
-ggsave("../charts/fs_total_affected_bar.png", width = 20, height = 30, units = "cm")
+ggsave("../charts/fs_total_affected_bar_no_idps.png", width = 20, height = 30, units = "cm")
 ```
 
 ```R
