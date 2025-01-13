@@ -1,0 +1,473 @@
+---
+title: 'Ethiopia: MAM Season Outlook <img src="https://drive.google.com/uc?id=1fHQUzF3ZjaoHj9KQ33-94dK_X1hcmjzW" style="height:50px;float:right;" />' 
+output:
+  html_document:
+    css: style.css
+    includes:
+      in_header: header.html
+    df_print: paged
+---
+
+```{r setup, include = FALSE, message = FALSE, warning = FALSE}
+
+# Setting up the dependencies...
+library(kableExtra)
+library(knitr)
+source("../R/setup.R")
+source("../R/load_data.R")
+source("../R/process_data.R")
+source("../R/plot_data.R")
+source("../R/blob_connect.R")
+knitr::opts_chunk$set(echo = FALSE) # do not print code by default
+knitr::opts_chunk$set(include = FALSE) # do not print output by default
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+
+
+``` {r constants}
+
+# Setting up the constants...
+ISO3 <- "ETH" # This isn't totally customizable...
+ADM_LEVEL <- 2 # And neither is this one...
+SEVERITY <- "tercile" # quartile or tercile 
+YEAR <- 2025
+months_to_include <- c(3, 4, 5) # MAM season...
+issued_month <- 11 # Select the month we want to get the forecasts issued from
+lead_times <- (months_to_include + 12 * (months_to_include < issued_month)) - issued_month
+
+Sys.setenv(AZURE_STORAGE_SAS_TOKEN=Sys.getenv("DSCI_AZ_SAS_PROD"))
+Sys.setenv(AZURE_STORAGE_ACCOUNT="imb0chd0prod")
+
+# Data specific to ETH
+gdf_pin <- get_eth_gdf_pin() # This contains all adms in ETH
+
+# Now we're just looking at data for the selected zones in season
+sel_zones <- subset_adm2_ond_mam()
+
+```
+
+```{r loading}
+
+df_seas5 <- get_historical_rainfall("seas5", ISO3, ADM_LEVEL, sel_zones)
+df_era5 <- get_historical_rainfall("era5", ISO3, ADM_LEVEL, sel_zones)
+df_seas5_processed <- process_seas5_rainfall(df_seas5, sel_month=issued_month)
+df_era5_processed <- process_era5_rainfall(df_era5)
+
+df_summary <- join_pin_rainfall(gdf_pin, df_seas5_processed)
+df_summary_era5 <- join_pin_rainfall(gdf_pin, df_era5_processed)
+
+df_summary_year <- df_summary %>%
+  filter(year == YEAR)
+```
+
+``` {r summarize}
+
+# TODO: Also the `total_unique_pcodes` value here doesn't seem correct...
+df_annual_pin <- calc_yearly_impact(df_summary, SEVERITY) %>%
+  mutate(
+    rank = rank(-total_affected, ties.method = "average"),
+    exceedance_prob = rank / (n() + 1),
+    return_period = 1 / exceedance_prob
+  )
+
+df_sel <- df_annual_pin %>%
+  filter(year == YEAR)
+
+total_affected <- df_sel$total_affected
+total_rp <- df_sel$return_period
+
+```
+
+``` {r load_cog_stack}
+
+pc <- load_proj_containers()
+
+cog_df <- list_blobs(
+  container = pc$GLOBAL_CONT,
+  dir = "seas5/monthly/processed"
+) %>%
+  mutate(
+    year = str_extract(name, "i(\\d{4})") %>% str_remove("i") %>% as.integer(),
+    month = str_extract(name, "-(\\d{2})-") %>% str_remove_all("-") %>% as.integer(),
+    lt = str_extract(name, "lt\\d+") %>% str_remove("lt") %>% as.integer()
+  ) %>%
+  filter(
+    month == issued_month,
+    lt %in% lead_times
+  )
+
+# Load by year, take the sum, then stack
+yearly_sums <- list()
+for(sel_year in unique(cog_df$year)) {
+  yearly_cogs <- filter(cog_df, year==sel_year)
+  urls <- paste0("/vsiaz/raster/", yearly_cogs$name)
+  cogs <- rast(urls)
+  cogs_clipped <- crop(cogs, gdf_pin)
+  cogs_masked <- mask(cogs_clipped, gdf_pin)
+  yearly_sum <- sum((cogs_masked * 30))
+  if(sel_year == 2024) {
+    current_yearly_sum <- yearly_sum
+  }
+  yearly_sums <- append(yearly_sums, yearly_sum)
+}
+
+season_avg <- mean(yearly_sums)
+
+```
+
+
+``` {r plot_anomalies, include = TRUE, fig.width=10, fig.height=5}
+
+gdf_sel <- gdf_pin %>% filter(admin2Pcode %in% sel_zones)
+
+# First, calculate global min and max for avg and current plots
+all_values <- c(values(season_avg), values(current_yearly_sum))
+global_min <- min(all_values, na.rm = TRUE)
+global_max <- max(all_values, na.rm = TRUE)
+
+# Mask rasters with gdf_sel
+season_avg_masked <- mask(season_avg, gdf_sel)
+current_yearly_sum_masked <- mask(current_yearly_sum, gdf_sel)
+anomaly_masked <- mask(current_yearly_sum - season_avg, gdf_sel)
+
+# Calculate max absolute anomaly for symmetric scale
+max_abs_anomaly <- max(abs(values(anomaly_masked)), na.rm = TRUE)
+
+avg_plot <- ggplot() +
+  geom_spatraster(data = season_avg_masked, na.rm = TRUE) +
+  geom_sf(data = gdf_sel, fill = NA, color = "darkgrey", linewidth = 0.3) +
+  scale_fill_gradient_hdx_sapphire(
+    name = "Rainfall\n(mm)",
+    limits = c(global_min, global_max)
+  ) +
+  theme(plot.title = element_text(size = 12, hjust = 0.5),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank()
+  ) +
+  labs(title="Average historical")
+
+current_plot <- ggplot() +
+  geom_spatraster(data = current_yearly_sum_masked, na.rm = TRUE) +
+  geom_sf(data = gdf_sel, fill = NA, color = "darkgrey", linewidth = 0.3) +
+  scale_fill_gradient_hdx_sapphire(
+    name = "Rainfall\n(mm)",
+    limits = c(global_min, global_max)
+  ) +
+  theme(plot.title = element_text(size = 12, hjust = 0.5),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank()
+  ) +
+  labs(title="Upcoming season")
+
+anomaly_plot <- ggplot() +
+  geom_spatraster(data = anomaly_masked, na.rm = TRUE) +
+  geom_sf(data = gdf_sel, fill = NA, color = "darkgrey", linewidth = 0.3) +
+  scale_fill_gradient2(
+    low = "red",
+    mid = "white",
+    high = "blue",
+    midpoint = 0,
+    limits = c(-max_abs_anomaly, max_abs_anomaly),
+    na.value = NA,
+    name = "Rainfall\nAnomaly (mm)"
+  ) +
+  theme(plot.title = element_text(size = 12, hjust = 0.5),
+        axis.text.y = element_blank(),
+        axis.text.x = element_blank()
+  ) + 
+  labs(title="Anomalies")
+
+combined_plot <- wrap_plots(list(avg_plot, anomaly_plot), nrow = 1) +
+  plot_annotation(
+    title = 'Anomalies in total seasonal rainfall',
+    theme = theme(plot.title = element_text(size = 14))
+  )
+
+combined_plot
+
+```
+
+
+`r format(round(total_affected), big.mark=",")` people in need are forecasted to experience lower `r SEVERITY` rainfall throughout the upcoming season.
+
+We see this level of people in need once every `r round(total_rp, 1)` years.
+
+The 2025 rainfall forecast shows concerning patterns in central Ethiopia, where the darkest red areas indicate a 9-year return period for low rainfall - meaning these regions are expected to experience their lowest rainfall in nearly a decade. The pattern forms a north-south corridor through the central regions, with lower return periods (3-5 years) in the surrounding areas.
+
+
+``` {r rp_plot, include = TRUE, fig.height=5}
+
+affected_zones <- str_split(df_sel$affected_zones, ", ")[[1]]
+
+# Join again with all adms in ETH
+gdf_rp <- gdf_pin %>%
+  left_join(df_summary_year, by=c("admin2Pcode"="pcode"))
+
+gdf_lower_quantile <- gdf_pin %>%
+  filter(admin2Pcode %in% affected_zones)
+
+plot_rp <- ggplot() +
+  geom_sf(data=gdf_rp, aes(fill = return_period)) +
+  geom_sf(data=gdf_lower_quantile, aes(color="Lower tercile rainfall"), fill=NA,linewidth=1) +
+  scale_color_manual(
+    name = NULL,  # No title for boundary legend
+    values = c("Lower tercile rainfall" = "tomato")  # Color for the boundary lines
+  ) +
+  scale_fill_gradient_hdx_tomato(na.value = "lightgrey", name="Return Period (years)")+
+  labs(
+    title = paste("Rainfall Return Periods in", YEAR),
+    caption = "Higher return periods indicate rarer low-rainfall events"
+  )
+
+plot_rp
+```
+
+
+``` {r calc_yearly_avg}
+df_rainfall_annual <- df_summary %>% 
+  group_by(year) %>%
+  summarise(total_rainfall = sum(total_rainfall, na.rm=TRUE)) %>%
+  ungroup() %>%
+  arrange(total_rainfall) %>%
+  mutate(year = as.numeric(year))
+
+df_pin_annual <- df_summary %>% 
+  group_by(year) %>%
+  summarise(total_pin = sum(!!sym(glue("TotalPin_{SEVERITY}")), na.rm=TRUE)) %>%
+  ungroup() %>%
+  arrange(total_pin) %>%
+  mutate(year = as.numeric(year))
+```
+
+The March-April-May 2025 rainfall forecast for Ethiopia shows below-average conditions, falling between recent normal years (2023-2024) and the dry years of 2008/2020. While this dip in rainfall is notable, it remains far enough from historical drought levels to avoid severe concerns, though farmers should prepare for a drier than usual season.
+
+``` {r, include = TRUE, fig.width=10, fig.height=5}
+
+df_annual_summary <- df_pin_annual %>%
+  full_join(df_rainfall_annual, by="year") %>%
+  mutate(point_color = case_when(
+    year==2025~hdx_hex("tomato-hdx"), 
+    year %in% c(2024, 2023, 2020, 2012, 2008)~hdx_hex("sapphire-light"),
+    TRUE~hdx_hex("sapphire-hdx"))) %>%
+  filter(year > 2000)
+
+precip_mean <- mean(df_annual_summary$total_rainfall)
+affected_mean <- mean(df_annual_summary$total_pin)
+
+x_range <- range(df_annual_summary$total_rainfall)
+y_range <- range(df_annual_summary$total_pin)
+
+ggplot(df_annual_summary, aes(x = total_rainfall, y = total_pin)) +
+  #geom_vline(xintercept = mean_rainfall, linetype = "dashed", color = "tomato") +
+  geom_point(aes(color = point_color)) +
+  geom_text_repel(
+    data = df_annual_summary %>% filter(year %in% c(2025, 2024, 2023, 2020, 2012, 2008)),
+    aes(label = year, color = point_color),
+    box.padding = 0.3,    # Increases space between text and point
+    point.padding = 0.2,  # Increases minimum space between text and point
+    #segment.color = "grey50",  # Color of connecting lines
+    min.segment.length = 0,    # Always draw line segments
+    force = 2,                # Increase force of repulsion
+    fontface = "bold"
+  ) +
+  scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
+  scale_color_identity() +
+  labs(
+    title = "Annual MAM total rainfall vs est. PiN impacted by drought",
+    x = "Total Rainfall (mm)",
+    y = "Est. PiN Impacted by Drought",
+    subtitle = "From 2000 to 2025"
+  ) +
+  scale_x_continuous(limits = c(5100, 6500)) # + 
+  
+  #annotate("rect", xmin = -Inf, xmax = precip_mean, 
+  #         ymin = affected_mean, ymax = Inf, 
+  #         fill = "lightpink", alpha = 0.2) +
+  #annotate("rect", xmin = precip_mean, xmax = Inf, 
+  #         ymin = affected_mean, ymax = Inf, 
+  #         fill = "lightyellow", alpha = 0.2) +
+  #annotate("rect", xmin = -Inf, xmax = precip_mean, 
+  #         ymin = -Inf, ymax = affected_mean, 
+  #         fill = "lightblue", alpha = 0.2) +
+  #annotate("rect", xmin = precip_mean, xmax = Inf, 
+  #         ymin = -Inf, ymax = affected_mean, 
+  #         fill = "lightgreen", alpha = 0.2) +
+  
+  # Add quadrant labels - now positioned at the top
+  #annotate("text", 
+  #         x = precip_mean - (x_range[2] - x_range[1])/4,
+  #         y = y_range[2] + 100000,# - (y_range[2] - y_range[1])/20,  # Top left quadrant
+  #         label = "Low Rainfall / High PiN",
+  #         size = 3.5) +
+  #annotate("text", 
+  #         x = precip_mean + (x_range[2] - x_range[1])/4,
+  #         y = y_range[2] + 100000, # - (y_range[2] - y_range[1])/20,  # Top right quadrant
+  #         label = "High Rainfall / High PiN",
+  #         size = 3.5) +
+  #annotate("text", 
+  #         x = precip_mean - (x_range[2] - x_range[1])/4,
+  #         y = affected_mean - 300000, #- (y_range[2] - y_range[1])/15,  # Bottom left quadrant
+  #         label = "Low Rainfall / Low PiN",
+  #         size = 3.5) +
+  #annotate("text", 
+  #         x = precip_mean + (x_range[2] - x_range[1])/4,
+  #         y = affected_mean - 300000, # - (y_range[2] - y_range[1])/15,  # Bottom right quadrant
+  #         label = "High Rainfall / Low PiN",
+  #         size = 3.5) 
+
+```
+
+``` {r ARCHIVE_density_plot}
+recent_years <- filter(df_rainfall_annual, year %in% c(2025, 2020, 2024, 2023, 2008))
+mean_rainfall <- mean(df_rainfall_annual$total_rainfall, na.rm = TRUE)
+
+density_plot <- ggplot(data=df_rainfall_annual, aes(x=total_rainfall)) +
+  # Density plot
+  geom_density(fill="steelblue", alpha=0.5 ) +
+  # Mean rainfall
+  geom_vline(xintercept = mean_rainfall, color = "black") +
+  geom_text(aes(
+    x = mean_rainfall,
+    y = max(density(df_rainfall_annual$total_rainfall)$y)),
+    label = "Mean",
+    angle = 90,
+    size=3.5,
+    vjust = -0.5,
+    hjust = 1.5,
+    color = "black") + 
+  # Highlighted years 
+  geom_vline(xintercept = recent_years$total_rainfall, 
+             linetype="dashed",
+             color=ifelse(recent_years$year == 2025, "red", "black")) + 
+  geom_text(data = recent_years,
+            aes(x = total_rainfall, 
+                y = max(density(df_rainfall_annual$total_rainfall)$y),
+                label = year),
+            vjust = -0.5,
+            hjust = 5,
+            angle=90,
+            size = 3.5,
+            color=ifelse(recent_years$year == 2025, "red", "black")) +
+  # Additional styling
+  theme(axis.text.y = element_blank()) +
+  labs(x="Total seasonal rainfall (mm)", y="Density of occurrence", title="Distribution of annual total seasonal rainfall")
+```
+
+``` {r ARCHIVE_plot_forecast}
+gdf_sel <- gdf_pin %>% filter(admin2Pcode %in% sel_zones)
+
+raster_list <- list()
+for(lt in lead_times) {
+  blob_path <- sprintf("seas5/monthly/processed/precip_em_i2024-11-01_lt%d.tif", lt)
+  cog_url <- file.path(base_url, container, blob_path)
+  cog_url <- paste0(cog_url, "?", sas_token)
+  try({
+    r <- rast(cog_url)
+    raster_list[[length(raster_list) + 1]] <- r
+  }, silent = TRUE)
+}
+
+cog_stack <- rast(raster_list)
+clipped_stack <- crop(cog_stack, gdf_pin)
+masked_stack <- mask(clipped_stack, gdf_pin)
+
+global_min <- min(values(masked_stack), na.rm=TRUE)
+global_max <- max(values(masked_stack), na.rm=TRUE)
+
+plots <- list()
+months <- c("March", "April", "May")
+for(i in 1:nlyr(masked_stack)) {
+  p <- ggplot() +
+    geom_spatraster(data = masked_stack[[i]], na.rm = TRUE) +
+    geom_sf(data = gdf_sel, fill = NA, color = "darkgrey", linewidth = 0.3) +
+    scale_fill_gradient_hdx_sapphire(
+      na.value = NA, 
+      name="Rainfall\n(mm)",
+      limits = c(global_min, global_max),
+    )+
+    ggtitle(months[i]) +
+    theme(plot.title = element_text(size = 14, hjust=0.5),
+          axis.text.y = element_blank(),
+          axis.text.x = element_blank()
+          
+    )
+  
+  # Remove legend from all but the last plot
+  if(i != nlyr(masked_stack)) {
+    p <- p + theme(legend.position = "none")
+  }
+  plots[[i]] <- p
+}
+
+
+```
+
+``` {r ARCHIVE_create_plot_forecast, include = TRUE, fig.width=10, fig.height=5}
+combined_plot <- wrap_plots(plots, nrow = 1) +
+  plot_annotation(
+    title = 'Forecasted Average Daily Rainfall',
+    theme = theme(plot.title = element_text(size = 16))
+  )
+combined_plot
+
+```
+
+``` {r ARCHIVE_annual_rainfall}
+df_rainfall_annual <- df_summary %>% 
+  group_by(year) %>%
+  summarise(total_rainfall = sum(total_rainfall, na.rm=TRUE)) %>%
+  ungroup() %>%
+  arrange(total_rainfall) %>%
+  mutate(year = as.numeric(year))
+
+ggplot(df_rainfall_annual, aes(x = reorder(year, total_rainfall), 
+               y = total_rainfall,
+               fill = year == YEAR)) +
+  geom_col() +
+  scale_fill_manual(values = c("steelblue", "tomato")) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.5)),  # Add 30% padding at top
+    #labels = scales::label_number(scale = 1e-6, suffix = "M")
+  ) +
+  labs(x = "", y = "Rainfall (mm)", title="Ranked annual total MAM rainfall") +
+  geom_text(aes(label = year), 
+          angle = 90,
+          hjust = -0.2,  # Pushes labels above bars
+          size = 3)  +  # Adjust text size as needed
+    theme(
+    legend.position = "none",
+    axis.text.x = element_blank(),  # Remove year labels from axis
+    axis.ticks.x = element_blank() ) # Remove axis ticks
+
+
+```
+
+``` {r ARCHIVE_annual_PIN}
+
+df_pin_annual <- df_summary %>% 
+  group_by(year) %>%
+  summarise(total_pin = sum(!!sym(glue("TotalPin_{SEVERITY}")), na.rm=TRUE)) %>%
+  ungroup() %>%
+  arrange(total_pin) %>%
+  mutate(year = as.numeric(year))
+
+ggplot(df_pin_annual, aes(x = reorder(year, -total_pin), 
+               y = total_pin,
+               fill = year == YEAR)) +
+  geom_col() +
+  scale_fill_manual(values = c("lightgray", "tomato")) +
+  scale_y_continuous(
+    expand = expansion(mult = c(0, 0.5)),  # Add 50% padding at top
+    labels = scales::label_number(scale = 1e-6, suffix = "M")
+  ) +
+  labs(x = "", y = "Total PiN", title="Ranked annual total MAM PiN", caption=glue("'Total PiN' is calculated as the sum of all PiN in zones experiencing lower {SEVERITY} seasonal rainfall")) +
+  geom_text(aes(label = year), 
+          angle = 90,
+          hjust = -0.2,  # Pushes labels above bars
+          size = 3)  +  # Adjust text size as needed
+    theme(
+    legend.position = "none",
+    axis.text.x = element_blank(),  # Remove year labels from axis
+    axis.ticks.x = element_blank() ) # Remove axis ticks
+  
+```
