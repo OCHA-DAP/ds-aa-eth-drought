@@ -30,8 +30,8 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 ISO3 <- "ETH" # This isn't totally customizable...
 ADM_LEVEL <- 2 # And neither is this one...
 SEVERITY <- "tercile" # quartile or tercile 
-YEAR <- 2025
-months_to_include <- c(3, 4, 5) # MAM season...
+YEAR <- 2024
+months_to_include <- c(10, 11, 12) # OND season...
 issued_month <- 11 # Select the month we want to get the forecasts issued from
 lead_times <- (months_to_include + 12 * (months_to_include < issued_month)) - issued_month
 
@@ -53,8 +53,8 @@ df_era5 <- get_historical_rainfall("era5", ISO3, ADM_LEVEL, sel_zones)
 df_seas5_processed <- process_seas5_rainfall(df_seas5, sel_month=issued_month)
 df_era5_processed <- process_era5_rainfall(df_era5)
 
-df_summary <- join_pin_rainfall(gdf_pin, df_seas5_processed)
-df_summary_era5 <- join_pin_rainfall(gdf_pin, df_era5_processed)
+df_summary_seas5 <- join_pin_rainfall(gdf_pin, df_seas5_processed)
+df_summary <- join_pin_rainfall(gdf_pin, df_era5_processed)
 
 df_summary_year <- df_summary %>%
   filter(year == YEAR)
@@ -84,16 +84,17 @@ pc <- load_proj_containers()
 
 cog_df <- list_blobs(
   container = pc$GLOBAL_CONT,
-  dir = "seas5/monthly/processed"
+  dir = "era5/monthly/processed"
 ) %>%
   mutate(
-    year = str_extract(name, "i(\\d{4})") %>% str_remove("i") %>% as.integer(),
+    year = str_extract(name, "v(\\d{4})") %>% str_remove("v") %>% as.integer(), # 'v' for ERA5
     month = str_extract(name, "-(\\d{2})-") %>% str_remove_all("-") %>% as.integer(),
     lt = str_extract(name, "lt\\d+") %>% str_remove("lt") %>% as.integer()
   ) %>%
   filter(
-    month == issued_month,
-    lt %in% lead_times
+    #month == issued_month,  # for SEAS5
+    #lt %in% lead_times  # for SEAS5
+    month %in% months_to_include # for ERA5
   )
 
 # Load by year, take the sum, then stack
@@ -114,7 +115,6 @@ for(sel_year in unique(cog_df$year)) {
 season_avg <- mean(yearly_sums)
 
 ```
-
 
 ``` {r plot_anomalies, include = TRUE, fig.width=10, fig.height=5}
 
@@ -246,10 +246,10 @@ The March-April-May 2025 rainfall forecast for Ethiopia shows below-average cond
 df_annual_summary <- df_pin_annual %>%
   full_join(df_rainfall_annual, by="year") %>%
   mutate(point_color = case_when(
-    year==2025~hdx_hex("tomato-hdx"), 
-    year %in% c(2024, 2023, 2020, 2012, 2008)~hdx_hex("sapphire-light"),
+    year==YEAR~hdx_hex("tomato-hdx"), 
+    year %in% c(2023, 2020, 2012, 2008)~hdx_hex("sapphire-light"),
     TRUE~hdx_hex("sapphire-hdx"))) %>%
-  filter(year > 2000)
+  filter(year > 2000) # filtering to more recent years -- greater than 2000
 
 precip_mean <- mean(df_annual_summary$total_rainfall)
 affected_mean <- mean(df_annual_summary$total_pin)
@@ -273,12 +273,12 @@ ggplot(df_annual_summary, aes(x = total_rainfall, y = total_pin)) +
   scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
   scale_color_identity() +
   labs(
-    title = "Annual MAM total rainfall vs est. PiN impacted by drought",
+    title = "Annual OND total rainfall vs est. PiN impacted by drought",
     x = "Total Rainfall (mm)",
     y = "Est. PiN Impacted by Drought",
-    subtitle = "From 2000 to 2025"
-  ) +
-  scale_x_continuous(limits = c(5100, 6500)) # + 
+    subtitle = "From 2000 to 2024"
+  ) #+
+  #scale_x_continuous(limits = c(5100, 6500)) # + 
   
   #annotate("rect", xmin = -Inf, xmax = precip_mean, 
   #         ymin = affected_mean, ymax = Inf, 

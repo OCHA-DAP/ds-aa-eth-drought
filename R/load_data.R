@@ -29,15 +29,21 @@ get_eth_gdf_pin <- function(){
     layer = "eth_admbnda_adm2_csa_bofedb_2024") %>%
     filter(!(admin2Pcode %in% list("ET0000", "ET1000")))
   
+  # fname = "Food Security PIN and severity 2025.xlsx"
+  # sheet_name <- "WS - 3.1 PIN"
+
+  fname <- "Food Security_PIN_Severity_2024.xlsx"
+  sheet_name <- "Cluster PiN"
+  
   # Get the PiN data and join with the geodataframe
   df_pin_fs <- read_excel(
-    path = file.path(Sys.getenv("AA_DATA_DIR"), "public", "exploration", "eth", "pin", "Food Security PIN and severity 2025.xlsx"),
+    path = file.path(Sys.getenv("AA_DATA_DIR"), "public", "exploration", "eth", "pin", fname),
     skip = 1,  
     col_names = TRUE,
-    sheet = "WS - 3.1 PIN"
+    sheet = sheet_name
   ) %>% 
     group_by(`Admin 2 P-Code`) %>%
-    summarise(total_pin = sum(`Food Security Cluster`, na.rm = TRUE)) %>%
+    summarise(total_pin = sum(`Cluster PiN`, na.rm = TRUE)) %>%  # or `Food Security Cluster`
     select("Admin 2 P-Code", "total_pin")
   
   gdf_adm2 <- eth_adm2 %>%
