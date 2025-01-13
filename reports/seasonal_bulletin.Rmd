@@ -63,9 +63,9 @@ df_summary_year <- df_summary %>%
 ```
 
 ``` {r}
-df_export <- df_summary_year |>
-  select(pcode, admin2Name_en, year, total_rainfall, return_period)
-write.csv(df_export, "2024_ond_summary.csv")
+#df_export <- df_summary_year |>
+#  select(pcode, admin2Name_en, year, total_rainfall, return_period)
+#write.csv(df_export, "2024_ond_summary.csv")
 ```
 
 ``` {r summarize}
@@ -88,10 +88,10 @@ total_rp <- df_sel$return_period
 
 ``` {r load_cog_stack}
 
-pc <- load_proj_containers()
+containers <- cumulus::blob_containers(stage="prod")
 
 cog_df <- list_blobs(
-  container = pc$GLOBAL_CONT,
+  container = containers$raster,
   dir = "era5/monthly/processed"
 ) %>%
   mutate(
