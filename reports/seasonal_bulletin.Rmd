@@ -30,7 +30,7 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 ISO3 <- "ETH" # This isn't totally customizable...
 ADM_LEVEL <- 2 # And neither is this one...
 SEVERITY <- "tercile" # quartile or tercile 
-YEAR <- 2024
+YEAR <- 2024 # also need to change some plot titles
 months_to_include <- c(10, 11, 12) # OND season...
 issued_month <- 11 # Select the month we want to get the forecasts issued from
 lead_times <- (months_to_include + 12 * (months_to_include < issued_month)) - issued_month
@@ -58,6 +58,12 @@ df_summary <- join_pin_rainfall(gdf_pin, df_era5_processed)
 
 df_summary_year <- df_summary %>%
   filter(year == YEAR)
+```
+
+``` {r}
+df_export <- df_summary_year |>
+  select(pcode, admin2Name_en, year, total_rainfall, return_period)
+write.csv(df_export, "2024_ond_summary.csv")
 ```
 
 ``` {r summarize}
@@ -192,8 +198,6 @@ combined_plot
 
 We see this level of people in need once every `r round(total_rp, 1)` years.
 
-The 2025 rainfall forecast shows concerning patterns in central Ethiopia, where the darkest red areas indicate a 9-year return period for low rainfall - meaning these regions are expected to experience their lowest rainfall in nearly a decade. The pattern forms a north-south corridor through the central regions, with lower return periods (3-5 years) in the surrounding areas.
-
 
 ``` {r rp_plot, include = TRUE, fig.height=5}
 
@@ -239,7 +243,6 @@ df_pin_annual <- df_summary %>%
   mutate(year = as.numeric(year))
 ```
 
-The March-April-May 2025 rainfall forecast for Ethiopia shows below-average conditions, falling between recent normal years (2023-2024) and the dry years of 2008/2020. While this dip in rainfall is notable, it remains far enough from historical drought levels to avoid severe concerns, though farmers should prepare for a drier than usual season.
 
 ``` {r, include = TRUE, fig.width=10, fig.height=5}
 
@@ -277,43 +280,7 @@ ggplot(df_annual_summary, aes(x = total_rainfall, y = total_pin)) +
     x = "Total Rainfall (mm)",
     y = "Est. PiN Impacted by Drought",
     subtitle = "From 2000 to 2024"
-  ) #+
-  #scale_x_continuous(limits = c(5100, 6500)) # + 
-  
-  #annotate("rect", xmin = -Inf, xmax = precip_mean, 
-  #         ymin = affected_mean, ymax = Inf, 
-  #         fill = "lightpink", alpha = 0.2) +
-  #annotate("rect", xmin = precip_mean, xmax = Inf, 
-  #         ymin = affected_mean, ymax = Inf, 
-  #         fill = "lightyellow", alpha = 0.2) +
-  #annotate("rect", xmin = -Inf, xmax = precip_mean, 
-  #         ymin = -Inf, ymax = affected_mean, 
-  #         fill = "lightblue", alpha = 0.2) +
-  #annotate("rect", xmin = precip_mean, xmax = Inf, 
-  #         ymin = -Inf, ymax = affected_mean, 
-  #         fill = "lightgreen", alpha = 0.2) +
-  
-  # Add quadrant labels - now positioned at the top
-  #annotate("text", 
-  #         x = precip_mean - (x_range[2] - x_range[1])/4,
-  #         y = y_range[2] + 100000,# - (y_range[2] - y_range[1])/20,  # Top left quadrant
-  #         label = "Low Rainfall / High PiN",
-  #         size = 3.5) +
-  #annotate("text", 
-  #         x = precip_mean + (x_range[2] - x_range[1])/4,
-  #         y = y_range[2] + 100000, # - (y_range[2] - y_range[1])/20,  # Top right quadrant
-  #         label = "High Rainfall / High PiN",
-  #         size = 3.5) +
-  #annotate("text", 
-  #         x = precip_mean - (x_range[2] - x_range[1])/4,
-  #         y = affected_mean - 300000, #- (y_range[2] - y_range[1])/15,  # Bottom left quadrant
-  #         label = "Low Rainfall / Low PiN",
-  #         size = 3.5) +
-  #annotate("text", 
-  #         x = precip_mean + (x_range[2] - x_range[1])/4,
-  #         y = affected_mean - 300000, # - (y_range[2] - y_range[1])/15,  # Bottom right quadrant
-  #         label = "High Rainfall / Low PiN",
-  #         size = 3.5) 
+  )
 
 ```
 
@@ -352,6 +319,9 @@ density_plot <- ggplot(data=df_rainfall_annual, aes(x=total_rainfall)) +
   theme(axis.text.y = element_blank()) +
   labs(x="Total seasonal rainfall (mm)", y="Density of occurrence", title="Distribution of annual total seasonal rainfall")
 ```
+
+
+ALL CODE BELOW IS ARCHIVED.
 
 ``` {r ARCHIVE_plot_forecast}
 gdf_sel <- gdf_pin %>% filter(admin2Pcode %in% sel_zones)
