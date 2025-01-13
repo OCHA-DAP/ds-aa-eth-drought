@@ -26,14 +26,3 @@ library(ggrepel)
 base_url <- "https://imb0chd0prod.blob.core.windows.net"
 sas_token <- Sys.getenv("DSCI_AZ_SAS_PROD")
 container <- "raster"
-
-gghdx()
-
-CON <- DBI::dbConnect(
-  drv = RPostgres::Postgres(),
-  user = "chdadmin",
-  host = "chd-rasterstats-prod.postgres.database.azure.com",
-  password = Sys.getenv("AZURE_DB_PW_PROD"),
-  port = 5432,
-  dbname = "postgres"
-)

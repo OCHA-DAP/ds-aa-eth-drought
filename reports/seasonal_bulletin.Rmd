@@ -21,6 +21,8 @@ source("../R/blob_connect.R")
 knitr::opts_chunk$set(echo = FALSE) # do not print code by default
 knitr::opts_chunk$set(include = FALSE) # do not print output by default
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+gghdx()
 ```
 
 

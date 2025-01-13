@@ -1,3 +1,5 @@
+library(cumulus)
+
 #' Get list of admin2 PCodes for March-April-May and Oct-Nov-Dec seasonal zones in Ethiopia
 #' @return Character vector of admin2 PCodes
 subset_adm2_ond_mam <- function() {
@@ -60,10 +62,11 @@ get_eth_gdf_pin <- function(){
 #' @param adm_level Administrative level
 #' @param sel_zones Vector of zone PCodes to filter
 #' @return Dataframe of historical rainfall data
-get_historical_rainfall <- function(table, iso3, adm_level, sel_zones){
+get_historical_rainfall <- function(table, iso3, adm_level, sel_zones, stage = "prod"){
   # Get the historical rainfall data from the database to selected zones
+  conn <- pg_con(stage = stage, write = FALSE)
   query <- glue("SELECT * from {table} WHERE iso3='{iso3}' AND adm_level={adm_level}")
-  df_precip <- dbGetQuery(CON, query) %>%
+  df_precip <- dbGetQuery(conn, query) %>%
     filter(
       pcode %in% sel_zones
     )
@@ -95,22 +98,6 @@ get_eth_pop <- function() {
     ungroup()
   
   return(df_pop)
-}
-
-get_seas5_stack <- function() {
-    pc <- blob_connect$load_proj_containers()
-    
-    cog_df <- AzureStor$list_blobs(
-      container = pc$GLOBAL_CONT,
-      dir = "seas5/mars/processed"
-    )
-    
-    container_vp <- paste0("/vsiaz/raster/")
-    urls <- paste0(container_vp, cog_df$name)
-    
-    Sys.setenv(AZURE_STORAGE_SAS_TOKEN=Sys.getenv("DSCI_AZ_SAS_PROD"))
-    Sys.setenv(AZURE_STORAGE_ACCOUNT="imb0chd0prod")
-    rast(urls)
 }
 
 
