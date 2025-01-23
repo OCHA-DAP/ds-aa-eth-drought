@@ -22,7 +22,7 @@ subset_adm2_ond_mam <- function() {
 
 #' Load Ethiopian admin2 boundaries and 2024 Food Security PIN data, joining them into a single sf object
 #' @return sf object with admin2 geometries and Food Security PIN data
-get_eth_gdf_pin <- function(){
+get_eth_gdf_pin <- function(year){
   # Get the admin bounds
   eth_adm2 <- st_read(
     file.path(
@@ -31,12 +31,16 @@ get_eth_gdf_pin <- function(){
     layer = "eth_admbnda_adm2_csa_bofedb_2024") %>%
     filter(!(admin2Pcode %in% list("ET0000", "ET1000")))
   
-  # fname = "Food Security PIN and severity 2025.xlsx"
-  # sheet_name <- "WS - 3.1 PIN"
+  if(year == 2025){
+    fname = "Food Security PIN and severity 2025.xlsx"
+    sheet_name <- "WS - 3.1 PIN"
+    cluster_pin_col <- "Food Security Cluster"
+  } else if (year == 2024){
+    fname <- "Food Security_PIN_Severity_2024.xlsx"
+    sheet_name <- "Cluster PiN"
+    cluster_pin_col <- "Cluster PiN"
+  }
 
-  fname <- "Food Security_PIN_Severity_2024.xlsx"
-  sheet_name <- "Cluster PiN"
-  
   # Get the PiN data and join with the geodataframe
   df_pin_fs <- read_excel(
     path = file.path(Sys.getenv("AA_DATA_DIR"), "public", "exploration", "eth", "pin", fname),
@@ -45,7 +49,7 @@ get_eth_gdf_pin <- function(){
     sheet = sheet_name
   ) %>% 
     group_by(`Admin 2 P-Code`) %>%
-    summarise(total_pin = sum(`Cluster PiN`, na.rm = TRUE)) %>%  # or `Food Security Cluster`
+    summarise(total_pin = sum(!!sym(cluster_pin_col), na.rm = TRUE)) %>%
     select("Admin 2 P-Code", "total_pin")
   
   gdf_adm2 <- eth_adm2 %>%

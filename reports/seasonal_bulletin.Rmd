@@ -17,7 +17,6 @@ source("../R/setup.R")
 source("../R/load_data.R")
 source("../R/process_data.R")
 source("../R/plot_data.R")
-source("../R/blob_connect.R")
 knitr::opts_chunk$set(echo = FALSE) # do not print code by default
 knitr::opts_chunk$set(include = FALSE) # do not print output by default
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
@@ -25,23 +24,33 @@ knitr::opts_chunk$set(warning = FALSE, message = FALSE)
 gghdx()
 ```
 
+``` {r global_constants}
+
+# CHANGE BELOW PER ANALYSIS
+
+ISO3 <- "ETH" # This isn't totally customizable...
+ADM_LEVEL <- 2 # And neither is this one...
+DATASET <- "seas5" # or "era5" supported
+
+SEVERITY <- "tercile" # quartile or tercile 
+YEAR <- 2025 # also need to change some plot titles
+months_to_include <- c(3, 4, 5) # MAM season...
+issued_month <- 1 # Select the month we want to get the forecasts issued from
+
+# For plot labels
+SEASON <- "MAM"
+
+```
 
 ``` {r constants}
 
-# Setting up the constants...
-ISO3 <- "ETH" # This isn't totally customizable...
-ADM_LEVEL <- 2 # And neither is this one...
-SEVERITY <- "tercile" # quartile or tercile 
-YEAR <- 2024 # also need to change some plot titles
-months_to_include <- c(10, 11, 12) # OND season...
-issued_month <- 11 # Select the month we want to get the forecasts issued from
 lead_times <- (months_to_include + 12 * (months_to_include < issued_month)) - issued_month
 
-Sys.setenv(AZURE_STORAGE_SAS_TOKEN=Sys.getenv("DSCI_AZ_SAS_PROD"))
-Sys.setenv(AZURE_STORAGE_ACCOUNT="imb0chd0prod")
+# Sys.setenv(AZURE_STORAGE_SAS_TOKEN=Sys.getenv("DSCI_AZ_SAS_PROD"))
+# Sys.setenv(AZURE_STORAGE_ACCOUNT="imb0chd0prod")
 
 # Data specific to ETH
-gdf_pin <- get_eth_gdf_pin() # This contains all adms in ETH
+gdf_pin <- get_eth_gdf_pin(YEAR) # This contains all adms in ETH
 
 # Now we're just looking at data for the selected zones in season
 sel_zones <- subset_adm2_ond_mam()
@@ -50,16 +59,23 @@ sel_zones <- subset_adm2_ond_mam()
 
 ```{r loading}
 
-df_seas5 <- get_historical_rainfall("seas5", ISO3, ADM_LEVEL, sel_zones)
-df_era5 <- get_historical_rainfall("era5", ISO3, ADM_LEVEL, sel_zones)
-df_seas5_processed <- process_seas5_rainfall(df_seas5, sel_month=issued_month)
-df_era5_processed <- process_era5_rainfall(df_era5)
+df_rainfall <- get_historical_rainfall(DATASET, ISO3, ADM_LEVEL, sel_zones)
 
-df_summary_seas5 <- join_pin_rainfall(gdf_pin, df_seas5_processed)
-df_summary <- join_pin_rainfall(gdf_pin, df_era5_processed)
+if(DATASET == "seas5") {
+  df_rainfall_processed <- process_seas5_rainfall(
+    df_rainfall,
+    sel_month=issued_month,
+    months_to_include = months_to_include
+  )
+} else if(DATASET == "era5") {
+  df_rainfall_processed <- process_era5_rainfall(
+    df_era5,
+    months_to_include = months_to_include
+  )
+}
 
-df_summary_year <- df_summary %>%
-  filter(year == YEAR)
+df_summary <- join_pin_rainfall(gdf_pin, df_rainfall_processed)
+df_summary_year <- df_summary %>% filter(year == YEAR)
 ```
 
 ``` {r}
@@ -89,21 +105,34 @@ total_rp <- df_sel$return_period
 ``` {r load_cog_stack}
 
 containers <- cumulus::blob_containers(stage="prod")
+dir_name <- paste0(DATASET, "/monthly/processed")
 
 cog_df <- list_blobs(
   container = containers$raster,
-  dir = "era5/monthly/processed"
-) %>%
+  dir = dir_name
+)
+
+# process cog_df slightly differently for seas5 or era5
+if(DATASET == "seas5") {
+  cog_df <- cog_df %>%
   mutate(
-    year = str_extract(name, "v(\\d{4})") %>% str_remove("v") %>% as.integer(), # 'v' for ERA5
+    year = str_extract(name, "i(\\d{4})") %>% str_remove("i") %>% as.integer(), 
     month = str_extract(name, "-(\\d{2})-") %>% str_remove_all("-") %>% as.integer(),
     lt = str_extract(name, "lt\\d+") %>% str_remove("lt") %>% as.integer()
   ) %>%
   filter(
-    #month == issued_month,  # for SEAS5
-    #lt %in% lead_times  # for SEAS5
-    month %in% months_to_include # for ERA5
+    month == issued_month,  # for SEAS5
+    lt %in% lead_times  # for SEAS5
   )
+  
+} else if(DATASET == "era5") {
+ cog_df <- cog_df %>%
+   mutate(
+    year = str_extract(name, "v(\\d{4})") %>% str_remove("v") %>% as.integer(),
+    month = str_extract(name, "-(\\d{2})-") %>% str_remove_all("-") %>% as.integer()
+  ) %>%
+  filter(month %in% months_to_include)
+}
 
 # Load by year, take the sum, then stack
 yearly_sums <- list()
@@ -113,8 +142,9 @@ for(sel_year in unique(cog_df$year)) {
   cogs <- rast(urls)
   cogs_clipped <- crop(cogs, gdf_pin)
   cogs_masked <- mask(cogs_clipped, gdf_pin)
-  yearly_sum <- sum((cogs_masked * 30))
-  if(sel_year == 2024) {
+  # go from mm/day to mm/month 
+  yearly_sum <- sum((cogs_masked * 30)) 
+  if(sel_year == max(cog_df$year)) {
     current_yearly_sum <- yearly_sum
   }
   yearly_sums <- append(yearly_sums, yearly_sum)
@@ -221,7 +251,7 @@ plot_rp <- ggplot() +
   ) +
   scale_fill_gradient_hdx_tomato(na.value = "lightgrey", name="Return Period (years)")+
   labs(
-    title = paste("Rainfall Return Periods in", YEAR),
+    title = glue("Rainfall Return Periods in {YEAR}"),
     caption = "Higher return periods indicate rarer low-rainfall events"
   )
 
@@ -248,11 +278,14 @@ df_pin_annual <- df_summary %>%
 
 ``` {r, include = TRUE, fig.width=10, fig.height=5}
 
+# These years will be highlighted on the chart
+REFERENCE_YEARS <- c(2023, 2020, 2012, 2008, 2024)
+
 df_annual_summary <- df_pin_annual %>%
   full_join(df_rainfall_annual, by="year") %>%
   mutate(point_color = case_when(
     year==YEAR~hdx_hex("tomato-hdx"), 
-    year %in% c(2023, 2020, 2012, 2008)~hdx_hex("sapphire-light"),
+    year %in% REFERENCE_YEARS~hdx_hex("sapphire-light"),
     TRUE~hdx_hex("sapphire-hdx"))) %>%
   filter(year > 2000) # filtering to more recent years -- greater than 2000
 
@@ -266,7 +299,7 @@ ggplot(df_annual_summary, aes(x = total_rainfall, y = total_pin)) +
   #geom_vline(xintercept = mean_rainfall, linetype = "dashed", color = "tomato") +
   geom_point(aes(color = point_color)) +
   geom_text_repel(
-    data = df_annual_summary %>% filter(year %in% c(2025, 2024, 2023, 2020, 2012, 2008)),
+    data = df_annual_summary %>% filter(year %in% c(REFERENCE_YEARS, YEAR)),
     aes(label = year, color = point_color),
     box.padding = 0.3,    # Increases space between text and point
     point.padding = 0.2,  # Increases minimum space between text and point
@@ -278,10 +311,10 @@ ggplot(df_annual_summary, aes(x = total_rainfall, y = total_pin)) +
   scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
   scale_color_identity() +
   labs(
-    title = "Annual OND total rainfall vs est. PiN impacted by drought",
+    title = glue("Annual {SEASON} total rainfall vs est. PiN impacted by drought"),
     x = "Total Rainfall (mm)",
     y = "Est. PiN Impacted by Drought",
-    subtitle = "From 2000 to 2024"
+    subtitle = glue("From 2000 to {YEAR}")
   )
 
 ```
@@ -320,6 +353,8 @@ density_plot <- ggplot(data=df_rainfall_annual, aes(x=total_rainfall)) +
   # Additional styling
   theme(axis.text.y = element_blank()) +
   labs(x="Total seasonal rainfall (mm)", y="Density of occurrence", title="Distribution of annual total seasonal rainfall")
+
+density_plot
 ```
 
 
