@@ -1,6 +1,5 @@
 library(glue)
-library(DBI)
-library(RPostgres)
+
 library(sf)
 library(ggplot2)
 library(dplyr)

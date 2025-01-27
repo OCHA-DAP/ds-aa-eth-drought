@@ -13,6 +13,7 @@ output:
 # Setting up the dependencies...
 library(kableExtra)
 library(knitr)
+library(gghdx)
 source("../R/setup.R")
 source("../R/load_data.R")
 source("../R/process_data.R")
@@ -20,6 +21,9 @@ source("../R/plot_data.R")
 knitr::opts_chunk$set(echo = FALSE) # do not print code by default
 knitr::opts_chunk$set(include = FALSE) # do not print output by default
 knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+Sys.setenv(AZURE_STORAGE_SAS_TOKEN=Sys.getenv("DSCI_AZ_SAS_PROD"))
+Sys.setenv(AZURE_STORAGE_ACCOUNT="imb0chd0prod")
 
 gghdx()
 ```
@@ -30,15 +34,18 @@ gghdx()
 
 ISO3 <- "ETH" # This isn't totally customizable...
 ADM_LEVEL <- 2 # And neither is this one...
-DATASET <- "seas5" # or "era5" supported
+DATASET <- "seas5" # or "era5" for historical overview
+SEASON <- "MAM"
 
 SEVERITY <- "tercile" # quartile or tercile 
-YEAR <- 2025 # also need to change some plot titles
-months_to_include <- c(3, 4, 5) # MAM season...
+YEAR <- 2025
 issued_month <- 1 # Select the month we want to get the forecasts issued from
 
-# For plot labels
-SEASON <- "MAM"
+if(SEASON == "MAM") {
+  months_to_include <- c(3, 4, 5)
+} else if(SEASON == "OND") {
+  months_to_include <- c(10, 11, 12)
+}
 
 ```
 
@@ -46,14 +53,21 @@ SEASON <- "MAM"
 
 lead_times <- (months_to_include + 12 * (months_to_include < issued_month)) - issued_month
 
-# Sys.setenv(AZURE_STORAGE_SAS_TOKEN=Sys.getenv("DSCI_AZ_SAS_PROD"))
-# Sys.setenv(AZURE_STORAGE_ACCOUNT="imb0chd0prod")
-
-# Data specific to ETH
-gdf_pin <- get_eth_gdf_pin(YEAR) # This contains all adms in ETH
-
-# Now we're just looking at data for the selected zones in season
-sel_zones <- subset_adm2_ond_mam()
+if(ISO3 == "ETH"){
+  gdf_pop <- get_eth_gdf_pin(YEAR) # This contains all adms in ETH
+  if(ADM_LEVEL == 2) {
+    sel_zones <- subset_adm2_ond_mam()
+  } else {
+    sel_zones <- NULL
+  }
+  pcode_col <- glue("admin{ADM_LEVEL}Pcode")
+  pop_var <- "PiN"
+} else if(ISO3 == "SOM"){
+  gdf_pop <- get_som_gdf_pop(ADM_LEVEL)
+  sel_zones <- NULL
+  pcode_col <- glue("ADM{ADM_LEVEL}_PCODE")
+  pop_var <- "Population"
+}
 
 ```
 
@@ -74,7 +88,7 @@ if(DATASET == "seas5") {
   )
 }
 
-df_summary <- join_pin_rainfall(gdf_pin, df_rainfall_processed)
+df_summary <- join_pop_rainfall(gdf_pop, df_rainfall_processed, pcode_col)
 df_summary_year <- df_summary %>% filter(year == YEAR)
 ```
 
@@ -87,14 +101,14 @@ df_summary_year <- df_summary %>% filter(year == YEAR)
 ``` {r summarize}
 
 # TODO: Also the `total_unique_pcodes` value here doesn't seem correct...
-df_annual_pin <- calc_yearly_impact(df_summary, SEVERITY) %>%
+df_annual_pop <- calc_yearly_impact(df_summary, SEVERITY) %>%
   mutate(
     rank = rank(-total_affected, ties.method = "average"),
     exceedance_prob = rank / (n() + 1),
     return_period = 1 / exceedance_prob
   )
 
-df_sel <- df_annual_pin %>%
+df_sel <- df_annual_pop %>%
   filter(year == YEAR)
 
 total_affected <- df_sel$total_affected
@@ -121,8 +135,8 @@ if(DATASET == "seas5") {
     lt = str_extract(name, "lt\\d+") %>% str_remove("lt") %>% as.integer()
   ) %>%
   filter(
-    month == issued_month,  # for SEAS5
-    lt %in% lead_times  # for SEAS5
+    month == issued_month,
+    lt %in% lead_times
   )
   
 } else if(DATASET == "era5") {
@@ -140,8 +154,8 @@ for(sel_year in unique(cog_df$year)) {
   yearly_cogs <- filter(cog_df, year==sel_year)
   urls <- paste0("/vsiaz/raster/", yearly_cogs$name)
   cogs <- rast(urls)
-  cogs_clipped <- crop(cogs, gdf_pin)
-  cogs_masked <- mask(cogs_clipped, gdf_pin)
+  cogs_clipped <- crop(cogs, gdf_pop)
+  cogs_masked <- mask(cogs_clipped, gdf_pop)
   # go from mm/day to mm/month 
   yearly_sum <- sum((cogs_masked * 30)) 
   if(sel_year == max(cog_df$year)) {
@@ -156,7 +170,12 @@ season_avg <- mean(yearly_sums)
 
 ``` {r plot_anomalies, include = TRUE, fig.width=10, fig.height=5}
 
-gdf_sel <- gdf_pin %>% filter(admin2Pcode %in% sel_zones)
+if(!is.null(sel_zones)){
+  gdf_sel <- gdf_pop %>% filter(!!sym(pcode_col) %in% sel_zones)
+} else {
+  gdf_sel <- gdf_pop
+}
+
 
 # First, calculate global min and max for avg and current plots
 all_values <- c(values(season_avg), values(current_yearly_sum))
@@ -235,16 +254,16 @@ We see this level of people in need once every `r round(total_rp, 1)` years.
 
 affected_zones <- str_split(df_sel$affected_zones, ", ")[[1]]
 
-# Join again with all adms in ETH
-gdf_rp <- gdf_pin %>%
-  left_join(df_summary_year, by=c("admin2Pcode"="pcode"))
+# Join again with all adms
+gdf_rp <- gdf_pop %>%
+  left_join(df_summary_year, by=setNames("pcode", pcode_col))
 
-gdf_lower_quantile <- gdf_pin %>%
-  filter(admin2Pcode %in% affected_zones)
+gdf_lower_quantile <- gdf_pop %>%
+  filter(!!sym(pcode_col) %in% affected_zones)
 
 plot_rp <- ggplot() +
   geom_sf(data=gdf_rp, aes(fill = return_period)) +
-  geom_sf(data=gdf_lower_quantile, aes(color="Lower tercile rainfall"), fill=NA,linewidth=1) +
+  geom_sf(data=gdf_lower_quantile, aes(color=glue("Lower {SEVERITY} rainfall")), fill=NA,linewidth=1) +
   scale_color_manual(
     name = NULL,  # No title for boundary legend
     values = c("Lower tercile rainfall" = "tomato")  # Color for the boundary lines
@@ -269,9 +288,9 @@ df_rainfall_annual <- df_summary %>%
 
 df_pin_annual <- df_summary %>% 
   group_by(year) %>%
-  summarise(total_pin = sum(!!sym(glue("TotalPin_{SEVERITY}")), na.rm=TRUE)) %>%
+  summarise(total_pop = sum(!!sym(glue("TotalPop_{SEVERITY}")), na.rm=TRUE)) %>%
   ungroup() %>%
-  arrange(total_pin) %>%
+  arrange(total_pop) %>%
   mutate(year = as.numeric(year))
 ```
 
@@ -295,7 +314,7 @@ affected_mean <- mean(df_annual_summary$total_pin)
 x_range <- range(df_annual_summary$total_rainfall)
 y_range <- range(df_annual_summary$total_pin)
 
-ggplot(df_annual_summary, aes(x = total_rainfall, y = total_pin)) +
+ggplot(df_annual_summary, aes(x = total_rainfall, y = total_pop)) +
   #geom_vline(xintercept = mean_rainfall, linetype = "dashed", color = "tomato") +
   geom_point(aes(color = point_color)) +
   geom_text_repel(
@@ -311,9 +330,9 @@ ggplot(df_annual_summary, aes(x = total_rainfall, y = total_pin)) +
   scale_y_continuous(labels = scales::label_number(scale = 1e-6, suffix = "M")) +
   scale_color_identity() +
   labs(
-    title = glue("Annual {SEASON} total rainfall vs est. PiN impacted by drought"),
+    title = glue("Annual {SEASON} total rainfall vs est. {pop_var} impacted by drought"),
     x = "Total Rainfall (mm)",
-    y = "Est. PiN Impacted by Drought",
+    y = glue("Est. {pop_var} Impacted by Drought"),
     subtitle = glue("From 2000 to {YEAR}")
   )
 
@@ -361,7 +380,7 @@ density_plot
 ALL CODE BELOW IS ARCHIVED.
 
 ``` {r ARCHIVE_plot_forecast}
-gdf_sel <- gdf_pin %>% filter(admin2Pcode %in% sel_zones)
+gdf_sel <- gdf_pop %>% filter(!!sym(pcode_col) %in% sel_zones)
 
 raster_list <- list()
 for(lt in lead_times) {
@@ -375,8 +394,8 @@ for(lt in lead_times) {
 }
 
 cog_stack <- rast(raster_list)
-clipped_stack <- crop(cog_stack, gdf_pin)
-masked_stack <- mask(clipped_stack, gdf_pin)
+clipped_stack <- crop(cog_stack, gdf_pop)
+masked_stack <- mask(clipped_stack, gdf_pop)
 
 global_min <- min(values(masked_stack), na.rm=TRUE)
 global_max <- max(values(masked_stack), na.rm=TRUE)
@@ -427,7 +446,7 @@ df_rainfall_annual <- df_summary %>%
   arrange(total_rainfall) %>%
   mutate(year = as.numeric(year))
 
-ggplot(df_rainfall_annual, aes(x = reorder(year, total_rainfall), 
+ranked_rainfall <- ggplot(df_rainfall_annual, aes(x = reorder(year, total_rainfall), 
                y = total_rainfall,
                fill = year == YEAR)) +
   geom_col() +
@@ -446,14 +465,14 @@ ggplot(df_rainfall_annual, aes(x = reorder(year, total_rainfall),
     axis.text.x = element_blank(),  # Remove year labels from axis
     axis.ticks.x = element_blank() ) # Remove axis ticks
 
-
+ranked_rainfall
 ```
 
 ``` {r ARCHIVE_annual_PIN}
 
 df_pin_annual <- df_summary %>% 
   group_by(year) %>%
-  summarise(total_pin = sum(!!sym(glue("TotalPin_{SEVERITY}")), na.rm=TRUE)) %>%
+  summarise(total_pin = sum(!!sym(glue("TotalPop_{SEVERITY}")), na.rm=TRUE)) %>%
   ungroup() %>%
   arrange(total_pin) %>%
   mutate(year = as.numeric(year))

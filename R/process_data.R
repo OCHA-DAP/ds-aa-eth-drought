@@ -41,7 +41,6 @@ process_seas5_rainfall <- function(
     sel_month = month(Sys.Date())
 ) {
 
-  print(sel_month)
   df_precip_summary <- df_seas5 %>%
     mutate(year = year(valid_date), valid_month = month(valid_date), issued_month = month(issued_date)) %>%
     filter(valid_month %in% months_to_include) %>%
@@ -69,17 +68,17 @@ process_seas5_rainfall <- function(
 }
 
 
-join_pin_rainfall <- function(df_pin, df_rainfall) {
+join_pop_rainfall <- function(df_pop, df_rainfall, pcode_col) {
   df_summary <- df_rainfall %>%
-    left_join(df_pin, by = c("pcode" = "admin2Pcode")) %>%
-    mutate(TotalPin_tercile = if_else(is_lower_tercile == FALSE, 0, total_pin)) %>%
-    mutate(TotalPin_quartile = if_else(is_lower_quartile == FALSE, 0, total_pin))
+    left_join(df_pop, by = setNames(pcode_col, "pcode")) %>%
+    mutate(TotalPop_tercile = if_else(is_lower_tercile == FALSE, 0, TotalPop)) %>%
+    mutate(TotalPop_quartile = if_else(is_lower_quartile == FALSE, 0, TotalPop))
   return(df_summary)
 }
 
 
 calc_yearly_impact <- function(df, severity) {
-  col <- paste0("TotalPin_", severity)
+  col <- paste0("TotalPop_", severity)
   df_ <- df %>% 
     group_by(year) %>% 
     summarise(

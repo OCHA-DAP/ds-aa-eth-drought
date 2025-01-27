@@ -1,4 +1,9 @@
 library(cumulus)
+library(httr)
+library(dplyr)
+library(sf)
+library(DBI)
+library(RPostgres)
 
 #' Get list of admin2 PCodes for March-April-May and Oct-Nov-Dec seasonal zones in Ethiopia
 #' @return Character vector of admin2 PCodes
@@ -53,7 +58,8 @@ get_eth_gdf_pin <- function(year){
     select("Admin 2 P-Code", "total_pin")
   
   gdf_adm2 <- eth_adm2 %>%
-    full_join(df_pin_fs, by=c("admin2Pcode"="Admin 2 P-Code"))
+    full_join(df_pin_fs, by=c("admin2Pcode"="Admin 2 P-Code")) %>%
+    rename(TotalPop = total_pin)
   
   return(gdf_adm2)
   
@@ -66,21 +72,23 @@ get_eth_gdf_pin <- function(year){
 #' @param adm_level Administrative level
 #' @param sel_zones Vector of zone PCodes to filter
 #' @return Dataframe of historical rainfall data
-get_historical_rainfall <- function(table, iso3, adm_level, sel_zones, stage = "prod"){
+get_historical_rainfall <- function(table, iso3, adm_level, sel_zones = NULL, stage = "prod"){
   # Get the historical rainfall data from the database to selected zones
   conn <- pg_con(stage = stage, write = FALSE)
   query <- glue("SELECT * from {table} WHERE iso3='{iso3}' AND adm_level={adm_level}")
-  df_precip <- dbGetQuery(conn, query) %>%
-    filter(
-      pcode %in% sel_zones
-    )
+  df_precip <- dbGetQuery(conn, query) 
+  if(!is.null(sel_zones)) {
+    df_precip <- df_precip %>%
+      filter(pcode %in% sel_zones)
+  }
   return(df_precip)
 }
 
 
-get_eth_pop <- function() {
+get_pop <- function(iso3, adm_level) {
+  col <- glue("admin{adm_level}_code")
   url <- paste0(
-    "https://hapi.humdata.org/api/v1/population-social/population?location_code=ETH&admin_level=2&output_format=json&app_identifier=",
+    glue("https://hapi.humdata.org/api/v1/population-social/population?location_code={iso3}&admin_level={adm_level}&output_format=json&app_identifier="),
     Sys.getenv("HDX_APP_IDENTIFIER"),
     "&limit=10000&offset=0")
   
@@ -95,7 +103,7 @@ get_eth_pop <- function() {
   }
   
   df_pop <- df %>%
-    group_by(admin2_code) %>% 
+    group_by(!!sym(col)) %>% 
     summarise(
       TotalPop = sum(population, na.rm=TRUE),
     ) %>%
@@ -104,7 +112,23 @@ get_eth_pop <- function() {
   return(df_pop)
 }
 
+#' Load COD boundaries and population data for a given ISO3 and admin level, joining them into a single sf object
+#' @return sf object
+get_som_gdf_pop <- function(adm_level){
+  gdf_som <- st_read(
+    file.path(
+      Sys.getenv("AA_DATA_DIR"),
+      "public", "raw", "som", "cod_ab", "som_adm.shp.zip"), 
+    layer = glue("som_admbnda_adm{adm_level}_ocha_20230308"))
+  
+  col1 <- glue("ADM{adm_level}_PCODE")
+  col2 <- glue("admin{adm_level}_code")
+  df_pop <- get_pop("SOM", adm_level)
 
-
+  gdf_joined <- gdf_som %>%
+    full_join(df_pop, by=setNames(col2, col1))
+  
+  return(gdf_joined)
+}
 
 
