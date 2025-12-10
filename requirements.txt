@@ -23,6 +23,7 @@ locket==1.0.0
 matplotlib
 nbformat
 numpy==1.26.4
+ocha-stratus
 packaging==23.2
 pandas==2.2.0
 partd==1.4.1
@@ -37,6 +38,7 @@ PyYAML==6.0.1
 rasterio==1.3.9
 rioxarray==0.15.1
 scipy==1.14.0
+seaborn==0.13.2
 shapely==2.0.2
 six==1.16.0
 snuggs==1.4.7
