@@ -18,3 +18,8 @@ charts/*
 analysis/.ipynb_checkpoints/*
 
 */.DS_Store
+/src.egg-info
+/src/src.egg-info
+/src/datasources/__pycache__
+/src/utils/__pycache__
+/src/__pycache__

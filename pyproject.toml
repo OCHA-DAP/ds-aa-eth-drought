@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "src"
+version = "0.0.1"
+description = "Drought AA Trigger for Ethiopia."
+authors = [
+    {name = "Pauline", email = "pauline.ndirangu@un.org"}
+]
+
+[tool.setuptools]
+packages = ["src"]
+
+[tool.setuptools.package-dir]
+"src" = "src"
