@@ -166,9 +166,47 @@ def main():
     hist = hist[[c for c in cols if c in hist.columns]]
     hist.to_csv(EXPORT_DIR / "trigger_history.csv", index=False)
 
-    print(f"MAM zones: {n_mam}   JJAS zones: {n_jjas}")
+    # --- per-window stats over the historical reference period (exclude the
+    # current forecast year). Return period = (n+1)/k (Weibull); prob = k/(n+1). ---
+    ref = hist[hist["year"] <= HIST_MAX_YEAR]
+    n_ref = ref["year"].nunique()
+
+    def _round_half_up(x, dp=0):
+        import math
+
+        f = 10**dp
+        return math.floor(x * f + 0.5) / f
+
+    stats_rows = []
+    for label, col, thr, n_zones in [
+        ("MAM (Mar-May)", "eth_drought_v1_wt1", MAM["threshold"], n_mam),
+        ("JJAS (Jun-Sep)", "eth_drought_v1_wt2", JJAS["threshold"], n_jjas),
+    ]:
+        yrs = list(ref.loc[ref[col] == True, "year"])  # noqa: E712
+        k = len(yrs)
+        rp = _round_half_up((n_ref + 1) / k, 1) if k else float("inf")
+        prob = int(_round_half_up(100 * k / (n_ref + 1))) if k else 0
+        stats_rows.append(
+            {
+                "window": label,
+                "data_source": "ECMWF SEAS5",
+                "zones_monitored": n_zones,
+                "min_zones_to_trigger": thr,
+                "return_period_yrs": rp,
+                "activation_prob": f"{prob}%",
+                "n_activations": k,
+                "reference_period": f"{ref['year'].min()}-{HIST_MAX_YEAR}",
+                "activated_years": ", ".join(str(y) for y in yrs),
+            }
+        )
+    stats = pd.DataFrame(stats_rows)
+    stats.to_csv(EXPORT_DIR / "trigger_stats.csv", index=False)
+
+    print(f"MAM zones: {n_mam}   JJAS zones: {n_jjas}   ref period: 1997-{HIST_MAX_YEAR} (n={n_ref})")
     print(hist.to_string(index=False))
-    print(f"\nwrote 3 files -> {EXPORT_DIR}")
+    print()
+    print(stats.to_string(index=False))
+    print(f"\nwrote 4 files -> {EXPORT_DIR}")
     return hist
 
 

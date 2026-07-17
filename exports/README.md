@@ -18,9 +18,32 @@ Two independent seasonal windows are exported. Both are **purely SEAS5-driven**
 | MAM (Belg) | `eth_drought_v1_wt1` | Feb | Mar–May | ≥ 15 zones @ ≥5yr RP |
 | JJAS (Kiremt) | `eth_drought_v1_wt2` | Apr **or** May | Jun–Sep | ≥ 35 zones @ ≥5yr RP |
 
+> A third window, **OND (Oct–Dec)**, exists in the wider framework but is **not** part of
+> this export: it is driven by the **WFP Maproom** (19 zones), not ECMWF SEAS5. This export
+> covers only the two SEAS5-driven windows.
+
+## Framework summary (matches the endorsed trigger-definition table)
+
+| | MAM (Mar–May) | JJAS (Jun–Sep) |
+|---|---|---|
+| Data source | ECMWF SEAS5 | ECMWF SEAS5 |
+| Lead time | 1 month | 1–2 months |
+| Zones monitored | 62 | 83 |
+| Minimum zones to trigger | 15 | 35 |
+| **Actual return period** | **1-in-3.0 yr** (10 / 29 yrs) | **1-in-4.3 yr** (7 / 29 yrs) |
+
+Return periods are computed over the 1997–2025 reference period (n = 29) as
+`(n + 1) / activations`; see `trigger_stats.csv`.
+
 ---
 
 ## Files
+
+### `trigger_stats.csv` (2 rows)
+
+Per-window summary — data source, zones monitored, threshold, return period, activation
+probability, and activated years over the 1997–2025 reference period. Mirrors the
+endorsed trigger-definition table.
 
 ### `trigger_history.csv` (30 rows, 1997–2026)
 
